@@ -22,8 +22,8 @@
   ],
   "schedules": [
     {
-      "name": "keepalive-cron-every-5m",
-      "cron": "*/5 * * * *",
+      "name": "keepalive-cron-every-1m",
+      "cron": "* * * * *",
       "path": "/api/cron/tick",
       "method": "GET",
       "timezone": "Asia/Shanghai"

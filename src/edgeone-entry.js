@@ -73,7 +73,7 @@ export async function onRequest(context) {
 
     try {
       const scheduledEvent = {
-        cron: '*/5 * * * *',
+        cron: '* * * * *',
         type: 'scheduled',
         scheduledTime: Date.now()
       };
