@@ -1764,13 +1764,31 @@ function getDB(env) {
 }
 function resolveEnv(contextEnv = {}) {
   const merged = { ...process.env, ...contextEnv };
+  if (!merged.ADMIN_USER) merged.ADMIN_USER = "admin";
+  if (!merged.ADMIN_PASS) merged.ADMIN_PASS = "admin";
   if (!merged.DB) {
     merged.DB = getDB(merged);
   }
   return merged;
 }
+async function materializeRequest(req) {
+  const method = (req.method || "GET").toUpperCase();
+  if (method === "GET" || method === "HEAD") {
+    return req;
+  }
+  try {
+    const buf = await req.arrayBuffer();
+    return new Request(req.url, {
+      method,
+      headers: req.headers,
+      body: buf.byteLength ? buf : void 0
+    });
+  } catch {
+    return req;
+  }
+}
 async function onRequest(context) {
-  const req = context.request;
+  const req = await materializeRequest(context.request);
   const url = new URL(req.url);
   const env = resolveEnv(context.env);
   if (url.pathname === "/api/cron/tick" || url.pathname === "/api/cron") {

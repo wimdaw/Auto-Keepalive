@@ -2,6 +2,7 @@
   "name": "auto-keepalive",
   "buildCommand": "npm run build",
   "installCommand": "npm install --include=dev",
+  "outputDirectory": "./dist",
   "cloudFunctions": {
     "maxDuration": 120,
     "regions": {

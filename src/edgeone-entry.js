@@ -21,6 +21,8 @@ function getDB(env) {
 
 function resolveEnv(contextEnv = {}) {
   const merged = { ...process.env, ...contextEnv };
+  if (!merged.ADMIN_USER) merged.ADMIN_USER = 'admin';
+  if (!merged.ADMIN_PASS) merged.ADMIN_PASS = 'admin';
   if (!merged.DB) {
     merged.DB = getDB(merged);
   }
@@ -28,11 +30,31 @@ function resolveEnv(contextEnv = {}) {
 }
 
 /**
+ * 请求体物化处理：避免 Node 运行时流式 body 并发被消费
+ */
+async function materializeRequest(req) {
+  const method = (req.method || 'GET').toUpperCase();
+  if (method === 'GET' || method === 'HEAD') {
+    return req;
+  }
+  try {
+    const buf = await req.arrayBuffer();
+    return new Request(req.url, {
+      method,
+      headers: req.headers,
+      body: buf.byteLength ? buf : undefined
+    });
+  } catch {
+    return req;
+  }
+}
+
+/**
  * EdgeOne onRequest 入口函数
  * context: { request, env, clientIp, geo, params }
  */
 export async function onRequest(context) {
-  const req = context.request;
+  const req = await materializeRequest(context.request);
   const url = new URL(req.url);
   const env = resolveEnv(context.env);
 
