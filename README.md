@@ -105,6 +105,33 @@
 
 ---
 
+## ⚡ EdgeOne Pages + Blob 部署指南 (edgeone 分支专属)
+
+本项目在 `edgeone` 分支已完全适配腾讯云 EdgeOne Pages 与 EdgeOne Blob 强一致性对象存储，并利用 EdgeOne Schedules 实现自动化定时唤醒。
+
+### 部署步骤：
+1. **开通 EdgeOne Pages 与存储**：
+   * 登录 EdgeOne 控制台，创建 Pages 项目并绑定此 GitHub 仓库（选择 `edgeone` 分支）。
+   * 开启项目的 **Blob 存储**（或在存储管理中创建名为 `autokeepalive` 的 Blob Store）。
+
+2. **构建配置**：
+   * **构建命令 (Build Command)**：`npm run build`
+   * **安装命令 (Install Command)**：`npm install --include=dev`
+   * **输出目录 (Output Directory)**：留空或默认
+
+3. **配置环境变量**：
+   在 EdgeOne Pages 项目的“环境变量”中配置：
+   * `ADMIN_USER`：管理员用户名（默认 `admin`）
+   * `ADMIN_PASS`：管理员密码（默认 `admin`）
+   * `CRON_TOKEN`：（可选）定时保活调度的鉴权 Token。
+   * *(可选)* 若平台未自动注入凭据，可显式配置 `EDGEONE_PROJECT_ID` 与 `EDGEONE_TOKEN`。
+
+4. **定时触发器自动生效**：
+   * 仓库内置 `edgeone.json`，其中配置了每 5 分钟一次的 schedules 定时任务：`*/5 * * * *` 请求 `/api/cron/tick`。
+   * 部署完成后，系统即会自动按照配置的间隔对各个任务进行保活探测。
+
+---
+
 ## ⚙️ 使用与配置指南
 
 通过浏览器访问你的 Worker 域名，输入你在环境变量中设置的账号密码即可进入仪表盘。

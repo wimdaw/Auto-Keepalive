@@ -1,0 +1,31 @@
+{
+  "name": "auto-keepalive",
+  "buildCommand": "npm run build",
+  "installCommand": "npm install --include=dev",
+  "cloudFunctions": {
+    "maxDuration": 120,
+    "regions": {
+      "overseas": ["ap-hongkong", "ap-singapore", "ap-tokyo"]
+    }
+  },
+  "headers": [
+    {
+      "source": "/*",
+      "headers": [
+        {
+          "key": "Cache-Control",
+          "value": "no-store, no-cache, must-revalidate"
+        }
+      ]
+    }
+  ],
+  "schedules": [
+    {
+      "name": "keepalive-cron-every-5m",
+      "cron": "*/5 * * * *",
+      "path": "/api/cron/tick",
+      "method": "GET",
+      "timezone": "Asia/Shanghai"
+    }
+  ]
+}
