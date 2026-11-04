@@ -1765,7 +1765,7 @@ function getDB(env) {
 function resolveEnv(contextEnv = {}) {
   const merged = { ...process.env, ...contextEnv };
   if (!merged.ADMIN_USER) merged.ADMIN_USER = "admin";
-  if (!merged.ADMIN_PASS) merged.ADMIN_PASS = "admin";
+  if (!merged.ADMIN_PASS) merged.ADMIN_PASS = "yxy.@990524gdg";
   if (!merged.DB) {
     merged.DB = getDB(merged);
   }
