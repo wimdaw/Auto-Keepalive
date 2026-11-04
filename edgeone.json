@@ -6,7 +6,7 @@
   "cloudFunctions": {
     "maxDuration": 120,
     "regions": {
-      "overseas": ["ap-hongkong", "ap-singapore", "ap-tokyo"]
+      "overseas": ["ap-hongkong"]
     }
   },
   "headers": [
