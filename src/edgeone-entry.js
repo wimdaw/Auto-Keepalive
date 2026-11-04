@@ -127,24 +127,30 @@ export async function onRequest(context) {
   // 保证种子数据已就绪
   await ensureSeedConfig(env.DB);
 
-  // 1. 定时任务触发点（EdgeOne schedules 默认打 /api/cron/tick）
+  // 1. 定时任务触发点（EdgeOne schedules 默认打 /api/cron/tick，外部拨测与面板一键探测入口）
   if (url.pathname === '/api/cron/tick' || url.pathname === '/api/cron') {
     const cronToken = env.CRON_TOKEN;
     const reqToken = url.searchParams.get('token');
+    const isForce = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
 
-    // 如果配置了 CRON_TOKEN 则校验口令
+    // 如果配置了 CRON_TOKEN 则校验口令（管理员 Cookie 会话可直接免口令触发）
     if (cronToken && reqToken !== cronToken) {
-      return new Response(JSON.stringify({ status: 'error', message: 'Unauthorized cron token' }), {
-        status: 403,
-        headers: { 'Content-Type': 'application/json' }
-      });
+      const cookieHeader = req.headers.get('Cookie') || '';
+      const hasSession = cookieHeader.includes('KA_SESSION=');
+      if (!hasSession) {
+        return new Response(JSON.stringify({ status: 'error', message: 'Unauthorized cron token' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json' }
+        });
+      }
     }
 
     try {
       const scheduledEvent = {
         cron: '* * * * *',
         type: 'scheduled',
-        scheduledTime: Date.now()
+        scheduledTime: Date.now(),
+        force: isForce
       };
       const executionCtx = {
         waitUntil: (promise) => {

@@ -60,6 +60,10 @@ const UI_HTML = `
                 <div class="flex flex-wrap items-center gap-2.5 w-full md:w-auto justify-end">
                     <span class="text-xs px-3 py-1 rounded-full bg-amber-100 text-amber-800 dark:bg-amber-950/60 dark:text-amber-300 font-medium animate-pulse mr-1" v-if="hasUnsavedChanges">⚠️ 更改待保存</span>
                     
+                    <button @click="triggerTick" :disabled="isTicking" class="bg-emerald-600 hover:bg-emerald-700 disabled:opacity-50 text-white px-3.5 py-2 rounded-xl shadow-sm transition font-bold text-xs flex items-center gap-1">
+                        <span>{{ isTicking ? '⏳' : '⚡' }}</span> {{ isTicking ? '探测中...' : '立即执行保活' }}
+                    </button>
+                    
                     <button @click="saveConfig" class="bg-indigo-600 hover:bg-indigo-700 text-white px-3.5 py-2 rounded-xl shadow-sm transition font-bold text-xs flex items-center gap-1">
                         <span>💾</span> 保存配置至服务器
                     </button>
@@ -116,9 +120,14 @@ const UI_HTML = `
                     <div class="bg-white dark:bg-slate-800 rounded-2xl shadow-sm border border-gray-200 dark:border-slate-700 overflow-hidden">
                         <div class="flex justify-between items-center p-5 border-b border-gray-200 dark:border-slate-700 bg-gray-50/50 dark:bg-slate-800/50">
                             <h2 class="text-sm font-bold text-gray-800 dark:text-slate-200">实时任务脉搏清单</h2>
-                            <button @click="loadConfig" class="text-xs bg-indigo-50 dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-slate-600 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-slate-600 transition flex items-center gap-1">
-                                <span>🔄</span> 刷新状态
-                            </button>
+                            <div class="flex gap-2">
+                                <button @click="triggerTick" :disabled="isTicking" class="text-xs bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 disabled:opacity-50 px-3 py-1.5 rounded-lg border border-emerald-200 dark:border-emerald-800 transition flex items-center gap-1 font-bold">
+                                    <span>{{ isTicking ? '⏳' : '⚡' }}</span> {{ isTicking ? '探测中...' : '立即探测' }}
+                                </button>
+                                <button @click="loadConfig" class="text-xs bg-indigo-50 dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-slate-600 px-3 py-1.5 rounded-lg border border-indigo-200 dark:border-slate-600 transition flex items-center gap-1">
+                                    <span>🔄</span> 刷新状态
+                                </button>
+                            </div>
                         </div>
                         <div class="overflow-x-auto">
                             <table class="w-full text-left border-collapse text-sm">
@@ -320,6 +329,9 @@ const UI_HTML = `
                             <p class="text-xs text-gray-400 dark:text-slate-400 mt-0.5">自动截取并保留最近 100 次定时脉搏探测的原始记录</p>
                         </div>
                         <div class="flex gap-2 self-end sm:self-auto">
+                            <button @click="triggerTick" :disabled="isTicking" class="text-xs bg-emerald-50 dark:bg-emerald-950/60 text-emerald-700 dark:text-emerald-400 hover:bg-emerald-100 dark:hover:bg-emerald-900/60 disabled:opacity-50 px-3 py-1.5 rounded-xl border border-emerald-200 dark:border-emerald-800 transition font-bold flex items-center gap-1">
+                                <span>{{ isTicking ? '⏳' : '⚡' }}</span> {{ isTicking ? '探测中...' : '立即执行一次探测' }}
+                            </button>
                             <button @click="clearLogs" class="text-xs text-red-500 hover:bg-red-50 dark:hover:bg-slate-700 px-3 py-1.5 rounded-xl border border-red-200 dark:border-slate-600 transition font-medium">🗑️ 清空日志</button>
                             <button @click="fetchLogs" class="text-xs bg-indigo-50 dark:bg-slate-700 text-indigo-600 dark:text-indigo-300 hover:bg-indigo-100 dark:hover:bg-slate-600 px-3 py-1.5 rounded-xl border border-indigo-200 dark:border-slate-600 transition font-bold flex items-center gap-1">🔄 刷新数据</button>
                         </div>
@@ -349,6 +361,18 @@ const UI_HTML = `
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                    
+                    <div class="p-4 bg-indigo-50/60 dark:bg-slate-900/60 border border-indigo-100 dark:border-slate-700/80 rounded-xl text-xs text-indigo-900 dark:text-indigo-300 flex items-start gap-2.5">
+                        <span class="text-base">💡</span>
+                        <div class="space-y-1">
+                            <div class="font-bold">自动化保活与定时监控配置建议：</div>
+                            <div class="text-gray-600 dark:text-slate-400">
+                                EdgeOne 等 Serverless 平台按需唤醒，建议搭配外部高频监控（如 <a href="https://uptimerobot.com" target="_blank" class="text-indigo-600 dark:text-indigo-400 font-bold underline">UptimeRobot</a> 或 <a href="https://cron-job.org" target="_blank" class="text-indigo-600 dark:text-indigo-400 font-bold underline">Cron-job.org</a>），配置每 1~5 分钟 GET 请求地址：
+                                <code class="px-1.5 py-0.5 rounded bg-white dark:bg-slate-800 border border-indigo-200 dark:border-slate-700 font-mono text-indigo-600 dark:text-indigo-400 font-bold select-all">/api/cron/tick</code>
+                                即可实现全天候 24 小时零间断自动探测与日志留存。
+                            </div>
+                        </div>
                     </div>
                 </div>
 
@@ -689,6 +713,27 @@ const UI_HTML = `
                     logs.value = [];
                 };
 
+                // ===== 一键执行全量保活探测 =====
+                const isTicking = ref(false);
+                const triggerTick = async () => {
+                    isTicking.value = true;
+                    try {
+                        const res = await fetch('/api/cron/tick?force=1');
+                        const data = await res.json();
+                        if (data.status === 'ok') {
+                            await loadConfig();
+                            await fetchLogs();
+                            alert('⚡ 全量站点保活探测执行完毕！已同步刷新任务状态与探测日志。');
+                        } else {
+                            alert('❌ 探测触发失败: ' + (data.message || '未知错误'));
+                        }
+                    } catch (e) {
+                        alert('❌ 网络请求异常: ' + e.message);
+                    } finally {
+                        isTicking.value = false;
+                    }
+                };
+
                 // ===== 通道与任务测试交互 =====
                 const executeTest = async (payload) => {
                     try {
@@ -788,6 +833,7 @@ const UI_HTML = `
                     isLoggedIn, isLoggingIn, loginForm, loggedInUser, doLogin, doLogout,
                     sysUsers, rootUsername, fetchUsers, saveUsers, addUser, removeUser,
                     config, logs, loadConfig, fetchLogs, clearLogs, saveConfig,
+                    isTicking, triggerTick,
                     newChannel, addChannel, removeChannel, testChannel,
                     showChannelModal, editingChannel, openEditChannelModal, confirmEditChannel, testEditingChannel,
                     newTask, addTask, removeTask,
@@ -970,17 +1016,30 @@ export default {
     },
 
     async scheduled(event, env, ctx) {
-        const config = await env.DB.get('SYSTEM_CONFIG', 'json');
-        if (!config || !config.tasks || config.tasks.length === 0) return;
+        let config = await env.DB.get('SYSTEM_CONFIG', 'json');
+        if (!config || !Array.isArray(config.tasks) || config.tasks.length === 0) {
+            config = {
+                tasks: [
+                    { name: "Koyeb — 163", url: "https://163-mail-relay-wimdaw-9b2e7582.koyeb.app/", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                    { name: "Koyeb — Ai-Gateway", url: "https://api-hackerxiaow-830602d5.koyeb.app/", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                    { name: "文章创作流水线", url: "https://article.seurl.eu.org/", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                    { name: "牛牛阅卷", url: "https://niu.seurl.eu.org/api/cron?token=nn_3ee1bee328613f342ac000ce2392227b", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                    { name: "instabox-keepalive", url: "https://3000-agqzwed6kzp5uiuaqqqme7mrjm.instabox.tech", interval: 5, notifyChannels: [], status: "ok", lastCheck: 0 }
+                ],
+                channels: []
+            };
+            try { await env.DB.put('SYSTEM_CONFIG', JSON.stringify(config)); } catch (e) {}
+        }
 
         let logsQueue = await env.DB.get('SYSTEM_LOGS', 'json') || [];
         const now = Date.now();
         let needsSaveConfig = false;
         let minuteLogs = [];
+        const isForce = !!(event && event.force);
 
         for (let task of config.tasks) {
             const intervalMs = (task.interval || 5) * 60 * 1000;
-            if (now - (task.lastCheck || 0) >= intervalMs) {
+            if (isForce || now - (task.lastCheck || 0) >= intervalMs) {
                 task.lastCheck = now;
                 needsSaveConfig = true;
 
@@ -989,7 +1048,7 @@ export default {
                 const startTs = Date.now();
 
                 try {
-                    const res = await fetch(task.url, { method: 'GET', headers: { 'User-Agent': 'Cloudflare-KeepAlive-Pro/13.0' }, cf: { cacheTtl: 0 } });
+                    const res = await fetch(task.url, { method: 'GET', headers: { 'User-Agent': 'EdgeOne-KeepAlive-Pro/1.3.0' } });
                     isSuccess = res.ok;
                     const rtt = Date.now() - startTs;
                     detailMsg = isSuccess ? `HTTP ${res.status} (${rtt}ms)` : `HTTP 状态异常: ${res.status}`;
@@ -999,7 +1058,7 @@ export default {
 
                 minuteLogs.push({ time: now, taskName: task.name, status: isSuccess ? 'ok' : 'down', detail: detailMsg });
 
-                const linkedChannels = config.channels.filter(c => task.notifyChannels.includes(c.name));
+                const linkedChannels = (config.channels || []).filter(c => (task.notifyChannels || []).includes(c.name));
                 const timeStr = new Date(now).toLocaleString('zh-CN', {timeZone: 'Asia/Shanghai'});
 
                 if (!isSuccess) {
