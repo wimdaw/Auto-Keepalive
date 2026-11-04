@@ -716,17 +716,28 @@
                 const triggerTick = async () => {
                     isTicking.value = true;
                     try {
-                        const res = await fetch('/api/cron/tick?force=1');
-                        const data = await res.json();
-                        if (data.status === 'ok') {
+                        const res = await fetch('/api/cron/tick?force=1', {
+                            method: 'GET',
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        let data = null;
+                        try {
+                            data = await res.json();
+                        } catch {
+                            const errText = await res.text().catch(() => '');
+                            throw new Error('服务返回异常 (HTTP ' + res.status + '): ' + errText.slice(0, 100));
+                        }
+
+                        if (res.ok && data.status === 'ok') {
                             await loadConfig();
                             await fetchLogs();
-                            alert('⚡ 全量站点保活探测执行完毕！已同步刷新任务状态与探测日志。');
+                            currentTab.value = 'logs';
+                            alert('⚡ 全量站点保活探测执行完毕！已为您同步刷新任务状态与探测日志。');
                         } else {
-                            alert('❌ 探测触发失败: ' + (data.message || '未知错误'));
+                            alert('❌ 探测触发失败: ' + (data.message || ('HTTP ' + res.status)));
                         }
                     } catch (e) {
-                        alert('❌ 网络请求异常: ' + e.message);
+                        alert('❌ 探测请求未完成: ' + e.message);
                     } finally {
                         isTicking.value = false;
                     }

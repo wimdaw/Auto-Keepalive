@@ -718,17 +718,28 @@ const UI_HTML = `
                 const triggerTick = async () => {
                     isTicking.value = true;
                     try {
-                        const res = await fetch('/api/cron/tick?force=1');
-                        const data = await res.json();
-                        if (data.status === 'ok') {
+                        const res = await fetch('/api/cron/tick?force=1', {
+                            method: 'GET',
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        let data = null;
+                        try {
+                            data = await res.json();
+                        } catch {
+                            const errText = await res.text().catch(() => '');
+                            throw new Error('服务返回异常 (HTTP ' + res.status + '): ' + errText.slice(0, 100));
+                        }
+
+                        if (res.ok && data.status === 'ok') {
                             await loadConfig();
                             await fetchLogs();
-                            alert('⚡ 全量站点保活探测执行完毕！已同步刷新任务状态与探测日志。');
+                            currentTab.value = 'logs';
+                            alert('⚡ 全量站点保活探测执行完毕！已为您同步刷新任务状态与探测日志。');
                         } else {
-                            alert('❌ 探测触发失败: ' + (data.message || '未知错误'));
+                            alert('❌ 探测触发失败: ' + (data.message || ('HTTP ' + res.status)));
                         }
                     } catch (e) {
-                        alert('❌ 网络请求异常: ' + e.message);
+                        alert('❌ 探测请求未完成: ' + e.message);
                     } finally {
                         isTicking.value = false;
                     }
@@ -1037,23 +1048,34 @@ export default {
         let minuteLogs = [];
         const isForce = !!(event && event.force);
 
-        for (let task of config.tasks) {
+        const tasksToRun = config.tasks.filter(task => {
             const intervalMs = (task.interval || 5) * 60 * 1000;
-            if (isForce || now - (task.lastCheck || 0) >= intervalMs) {
-                task.lastCheck = now;
-                needsSaveConfig = true;
+            return isForce || now - (task.lastCheck || 0) >= intervalMs;
+        });
 
+        if (tasksToRun.length > 0) {
+            needsSaveConfig = true;
+
+            // 5个任务全并发执行，单个任务设置 6 秒严格超时保护，彻底杜绝串行阻塞
+            await Promise.allSettled(tasksToRun.map(async (task) => {
+                task.lastCheck = now;
                 let isSuccess = false;
                 let detailMsg = "";
                 const startTs = Date.now();
 
                 try {
-                    const res = await fetch(task.url, { method: 'GET', headers: { 'User-Agent': 'EdgeOne-KeepAlive-Pro/1.3.0' } });
+                    const res = await fetch(task.url, {
+                        method: 'GET',
+                        headers: { 'User-Agent': 'EdgeOne-KeepAlive-Pro/1.3.0' },
+                        signal: AbortSignal.timeout(6000)
+                    });
                     isSuccess = res.ok;
                     const rtt = Date.now() - startTs;
                     detailMsg = isSuccess ? `HTTP ${res.status} (${rtt}ms)` : `HTTP 状态异常: ${res.status}`;
                 } catch (e) {
-                    isSuccess = false; detailMsg = `网络或DNS异常: ${e.message}`;
+                    const rtt = Date.now() - startTs;
+                    isSuccess = false;
+                    detailMsg = e.name === 'TimeoutError' ? `请求超时 (${rtt}ms)` : `连接异常: ${e.message}`;
                 }
 
                 minuteLogs.push({ time: now, taskName: task.name, status: isSuccess ? 'ok' : 'down', detail: detailMsg });
@@ -1063,14 +1085,18 @@ export default {
 
                 if (!isSuccess) {
                     task.status = 'down';
-                    await sendNotifications(linkedChannels, "🚨 站点保活失败", `【任务名称】${task.name}\n【监控网址】${task.url}\n【发生时间】${timeStr}\n【异常详情】${detailMsg}`);
+                    if (linkedChannels.length > 0) {
+                        ctx.waitUntil(sendNotifications(linkedChannels, "🚨 站点保活失败", `【任务名称】${task.name}\n【监控网址】${task.url}\n【发生时间】${timeStr}\n【异常详情】${detailMsg}`));
+                    }
                 } else {
                     if (task.status === 'down') {
-                        await sendNotifications(linkedChannels, "✅ 站点恢复正常", `【任务名称】${task.name}\n【监控网址】${task.url}\n【发生时间】${timeStr}\n【当前状态】已恢复正常访问`);
+                        if (linkedChannels.length > 0) {
+                            ctx.waitUntil(sendNotifications(linkedChannels, "✅ 站点恢复正常", `【任务名称】${task.name}\n【监控网址】${task.url}\n【发生时间】${timeStr}\n【当前状态】已恢复正常访问`));
+                        }
                     }
                     task.status = 'ok';
                 }
-            }
+            }));
         }
 
         if (needsSaveConfig) await env.DB.put('SYSTEM_CONFIG', JSON.stringify(config));

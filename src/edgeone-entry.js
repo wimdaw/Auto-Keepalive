@@ -163,13 +163,20 @@ export async function onRequest(context) {
 
       return new Response(JSON.stringify({ status: 'ok', message: 'Keepalive check executed successfully', timestamp: Date.now() }), {
         status: 200,
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Access-Control-Allow-Origin': '*'
+        }
       });
     } catch (err) {
       console.error('[Cron Execution Error]', err);
-      return new Response(JSON.stringify({ status: 'error', message: err?.message }), {
+      return new Response(JSON.stringify({ status: 'error', message: err?.message || String(err) }), {
         status: 500,
-        headers: { 'Content-Type': 'application/json' }
+        headers: {
+          'Content-Type': 'application/json',
+          'Access-Control-Allow-Origin': '*'
+        }
       });
     }
   }

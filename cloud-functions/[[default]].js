@@ -1346,17 +1346,28 @@ var UI_HTML = `
                 const triggerTick = async () => {
                     isTicking.value = true;
                     try {
-                        const res = await fetch('/api/cron/tick?force=1');
-                        const data = await res.json();
-                        if (data.status === 'ok') {
+                        const res = await fetch('/api/cron/tick?force=1', {
+                            method: 'GET',
+                            headers: { 'Accept': 'application/json' }
+                        });
+                        let data = null;
+                        try {
+                            data = await res.json();
+                        } catch {
+                            const errText = await res.text().catch(() => '');
+                            throw new Error('\u670D\u52A1\u8FD4\u56DE\u5F02\u5E38 (HTTP ' + res.status + '): ' + errText.slice(0, 100));
+                        }
+
+                        if (res.ok && data.status === 'ok') {
                             await loadConfig();
                             await fetchLogs();
-                            alert('\u26A1 \u5168\u91CF\u7AD9\u70B9\u4FDD\u6D3B\u63A2\u6D4B\u6267\u884C\u5B8C\u6BD5\uFF01\u5DF2\u540C\u6B65\u5237\u65B0\u4EFB\u52A1\u72B6\u6001\u4E0E\u63A2\u6D4B\u65E5\u5FD7\u3002');
+                            currentTab.value = 'logs';
+                            alert('\u26A1 \u5168\u91CF\u7AD9\u70B9\u4FDD\u6D3B\u63A2\u6D4B\u6267\u884C\u5B8C\u6BD5\uFF01\u5DF2\u4E3A\u60A8\u540C\u6B65\u5237\u65B0\u4EFB\u52A1\u72B6\u6001\u4E0E\u63A2\u6D4B\u65E5\u5FD7\u3002');
                         } else {
-                            alert('\u274C \u63A2\u6D4B\u89E6\u53D1\u5931\u8D25: ' + (data.message || '\u672A\u77E5\u9519\u8BEF'));
+                            alert('\u274C \u63A2\u6D4B\u89E6\u53D1\u5931\u8D25: ' + (data.message || ('HTTP ' + res.status)));
                         }
                     } catch (e) {
-                        alert('\u274C \u7F51\u7EDC\u8BF7\u6C42\u5F02\u5E38: ' + e.message);
+                        alert('\u274C \u63A2\u6D4B\u8BF7\u6C42\u672A\u5B8C\u6210: ' + e.message);
                     } finally {
                         isTicking.value = false;
                     }
@@ -1645,42 +1656,54 @@ var worker_v1_3_0_default = {
     let needsSaveConfig = false;
     let minuteLogs = [];
     const isForce = !!(event && event.force);
-    for (let task of config.tasks) {
+    const tasksToRun = config.tasks.filter((task) => {
       const intervalMs = (task.interval || 5) * 60 * 1e3;
-      if (isForce || now - (task.lastCheck || 0) >= intervalMs) {
+      return isForce || now - (task.lastCheck || 0) >= intervalMs;
+    });
+    if (tasksToRun.length > 0) {
+      needsSaveConfig = true;
+      await Promise.allSettled(tasksToRun.map(async (task) => {
         task.lastCheck = now;
-        needsSaveConfig = true;
         let isSuccess = false;
         let detailMsg = "";
         const startTs = Date.now();
         try {
-          const res = await fetch(task.url, { method: "GET", headers: { "User-Agent": "EdgeOne-KeepAlive-Pro/1.3.0" } });
+          const res = await fetch(task.url, {
+            method: "GET",
+            headers: { "User-Agent": "EdgeOne-KeepAlive-Pro/1.3.0" },
+            signal: AbortSignal.timeout(6e3)
+          });
           isSuccess = res.ok;
           const rtt = Date.now() - startTs;
           detailMsg = isSuccess ? `HTTP ${res.status} (${rtt}ms)` : `HTTP \u72B6\u6001\u5F02\u5E38: ${res.status}`;
         } catch (e) {
+          const rtt = Date.now() - startTs;
           isSuccess = false;
-          detailMsg = `\u7F51\u7EDC\u6216DNS\u5F02\u5E38: ${e.message}`;
+          detailMsg = e.name === "TimeoutError" ? `\u8BF7\u6C42\u8D85\u65F6 (${rtt}ms)` : `\u8FDE\u63A5\u5F02\u5E38: ${e.message}`;
         }
         minuteLogs.push({ time: now, taskName: task.name, status: isSuccess ? "ok" : "down", detail: detailMsg });
         const linkedChannels = (config.channels || []).filter((c) => (task.notifyChannels || []).includes(c.name));
         const timeStr = new Date(now).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
         if (!isSuccess) {
           task.status = "down";
-          await sendNotifications(linkedChannels, "\u{1F6A8} \u7AD9\u70B9\u4FDD\u6D3B\u5931\u8D25", `\u3010\u4EFB\u52A1\u540D\u79F0\u3011${task.name}
+          if (linkedChannels.length > 0) {
+            ctx.waitUntil(sendNotifications(linkedChannels, "\u{1F6A8} \u7AD9\u70B9\u4FDD\u6D3B\u5931\u8D25", `\u3010\u4EFB\u52A1\u540D\u79F0\u3011${task.name}
 \u3010\u76D1\u63A7\u7F51\u5740\u3011${task.url}
 \u3010\u53D1\u751F\u65F6\u95F4\u3011${timeStr}
-\u3010\u5F02\u5E38\u8BE6\u60C5\u3011${detailMsg}`);
+\u3010\u5F02\u5E38\u8BE6\u60C5\u3011${detailMsg}`));
+          }
         } else {
           if (task.status === "down") {
-            await sendNotifications(linkedChannels, "\u2705 \u7AD9\u70B9\u6062\u590D\u6B63\u5E38", `\u3010\u4EFB\u52A1\u540D\u79F0\u3011${task.name}
+            if (linkedChannels.length > 0) {
+              ctx.waitUntil(sendNotifications(linkedChannels, "\u2705 \u7AD9\u70B9\u6062\u590D\u6B63\u5E38", `\u3010\u4EFB\u52A1\u540D\u79F0\u3011${task.name}
 \u3010\u76D1\u63A7\u7F51\u5740\u3011${task.url}
 \u3010\u53D1\u751F\u65F6\u95F4\u3011${timeStr}
-\u3010\u5F53\u524D\u72B6\u6001\u3011\u5DF2\u6062\u590D\u6B63\u5E38\u8BBF\u95EE`);
+\u3010\u5F53\u524D\u72B6\u6001\u3011\u5DF2\u6062\u590D\u6B63\u5E38\u8BBF\u95EE`));
+            }
           }
           task.status = "ok";
         }
-      }
+      }));
     }
     if (needsSaveConfig) await env.DB.put("SYSTEM_CONFIG", JSON.stringify(config));
     if (minuteLogs.length > 0) {
@@ -1996,13 +2019,20 @@ async function onRequest(context) {
       await worker_v1_3_0_default.scheduled(scheduledEvent, env, executionCtx2);
       return new Response(JSON.stringify({ status: "ok", message: "Keepalive check executed successfully", timestamp: Date.now() }), {
         status: 200,
-        headers: { "Content-Type": "application/json" }
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "Access-Control-Allow-Origin": "*"
+        }
       });
     } catch (err) {
       console.error("[Cron Execution Error]", err);
-      return new Response(JSON.stringify({ status: "error", message: err?.message }), {
+      return new Response(JSON.stringify({ status: "error", message: err?.message || String(err) }), {
         status: 500,
-        headers: { "Content-Type": "application/json" }
+        headers: {
+          "Content-Type": "application/json",
+          "Access-Control-Allow-Origin": "*"
+        }
       });
     }
   }
