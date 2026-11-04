@@ -1756,6 +1756,52 @@ function createBlobKV(env = {}) {
 
 // src/edgeone-entry.js
 var cachedDB = null;
+var seedInitialized = false;
+var SEED_CONFIG = {
+  tasks: [
+    {
+      name: "Koyeb \u2014 163",
+      url: "https://163-mail-relay-wimdaw-9b2e7582.koyeb.app/",
+      interval: 1,
+      notifyChannels: [],
+      status: "ok",
+      lastCheck: 0
+    },
+    {
+      name: "Koyeb \u2014 Ai-Gateway",
+      url: "https://api-hackerxiaow-830602d5.koyeb.app/",
+      interval: 1,
+      notifyChannels: [],
+      status: "ok",
+      lastCheck: 0
+    },
+    {
+      name: "\u6587\u7AE0\u521B\u4F5C\u6D41\u6C34\u7EBF",
+      url: "https://article.seurl.eu.org/",
+      interval: 1,
+      notifyChannels: [],
+      status: "ok",
+      lastCheck: 0
+    },
+    {
+      name: "\u725B\u725B\u9605\u5377",
+      url: "https://niu.seurl.eu.org/api/cron?token=nn_3ee1bee328613f342ac000ce2392227b",
+      interval: 1,
+      notifyChannels: [],
+      status: "ok",
+      lastCheck: 0
+    },
+    {
+      name: "instabox-keepalive",
+      url: "https://3000-agqzwed6kzp5uiuaqqqme7mrjm.instabox.tech",
+      interval: 5,
+      notifyChannels: [],
+      status: "ok",
+      lastCheck: 0
+    }
+  ],
+  channels: []
+};
 function getDB(env) {
   if (!cachedDB) {
     cachedDB = createBlobKV(env);
@@ -1770,6 +1816,19 @@ function resolveEnv(contextEnv = {}) {
     merged.DB = getDB(merged);
   }
   return merged;
+}
+async function ensureSeedConfig(db) {
+  if (seedInitialized) return;
+  try {
+    const existing = await db.get("SYSTEM_CONFIG", "json");
+    if (!existing || !Array.isArray(existing.tasks) || existing.tasks.length === 0) {
+      console.log("[Seed] \u68C0\u6D4B\u5230 Blob \u5C1A\u672A\u521D\u59CB\u5316\u914D\u7F6E\uFF0C\u6B63\u5728\u5199\u5165 Cloudflare \u8FC1\u79FB\u7684 5 \u4E2A\u4FDD\u6D3B\u94FE\u63A5...");
+      await db.put("SYSTEM_CONFIG", JSON.stringify(SEED_CONFIG));
+    }
+    seedInitialized = true;
+  } catch (err) {
+    console.warn("[Seed] \u521D\u59CB\u5316\u914D\u7F6E\u68C0\u6D4B\u5F02\u5E38\uFF1A", err?.message);
+  }
 }
 async function materializeRequest(req) {
   const method = (req.method || "GET").toUpperCase();
@@ -1791,6 +1850,7 @@ async function onRequest(context) {
   const req = await materializeRequest(context.request);
   const url = new URL(req.url);
   const env = resolveEnv(context.env);
+  await ensureSeedConfig(env.DB);
   if (url.pathname === "/api/cron/tick" || url.pathname === "/api/cron") {
     const cronToken = env.CRON_TOKEN;
     const reqToken = url.searchParams.get("token");
