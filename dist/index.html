@@ -354,7 +354,7 @@
                     
                     <div class="border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 p-5 rounded-2xl">
                         <h3 class="font-extrabold text-sm text-indigo-800 dark:text-indigo-300 mb-2 flex items-center gap-1.5">👑 超级管理员 (Root)</h3>
-                        <p class="text-xs text-gray-500 dark:text-slate-400 mb-4">拥有系统最高权限。此账号的密码受 Cloudflare 环境变量严格保护，面板内不可删除与修改。</p>
+                        <p class="text-xs text-gray-500 dark:text-slate-400 mb-4">拥有系统最高权限。此账号的密码受 EdgeOne 云函数环境变量保护，面板内不可删除与修改。</p>
                         <div class="flex flex-col sm:flex-row gap-4">
                             <input :value="rootUsername" disabled class="w-full sm:w-1/2 p-3 border rounded-xl bg-gray-200/60 dark:bg-slate-900/60 dark:border-slate-700 text-sm font-bold text-gray-500 cursor-not-allowed">
                             <input value="********" disabled type="password" class="w-full sm:w-1/2 p-3 border rounded-xl bg-gray-200/60 dark:bg-slate-900/60 dark:border-slate-700 text-sm text-gray-500 cursor-not-allowed">
@@ -505,7 +505,17 @@
                 const isDark = ref(false);
                 const currentTab = ref('dashboard');
                 const hasUnsavedChanges = ref(false);
-                const config = ref({ tasks: [], channels: [] });
+                const DEFAULT_PRESET = {
+                    tasks: [
+                        { name: "Koyeb — 163", url: "https://163-mail-relay-wimdaw-9b2e7582.koyeb.app/", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                        { name: "Koyeb — Ai-Gateway", url: "https://api-hackerxiaow-830602d5.koyeb.app/", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                        { name: "文章创作流水线", url: "https://article.seurl.eu.org/", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                        { name: "牛牛阅卷", url: "https://niu.seurl.eu.org/api/cron?token=nn_3ee1bee328613f342ac000ce2392227b", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                        { name: "instabox-keepalive", url: "https://3000-agqzwed6kzp5uiuaqqqme7mrjm.instabox.tech", interval: 5, notifyChannels: [], status: "ok", lastCheck: 0 }
+                    ],
+                    channels: []
+                };
+                const config = ref(JSON.parse(JSON.stringify(DEFAULT_PRESET)));
                 const logs = ref([]); 
                 
                 // === Auth与多用户 ===
@@ -634,9 +644,18 @@
                         const res = await fetch('/api/config');
                         if (res.ok) {
                             const data = await res.json();
-                            if (data.tasks) {
+                            if (data.tasks && data.tasks.length > 0) {
                                 config.value = data;
                                 setTimeout(() => hasUnsavedChanges.value = false, 50);
+                            } else if (config.value.tasks && config.value.tasks.length > 0) {
+                                // 若云端暂无记录，自动把预置任务同步保存到数据库
+                                fetch('/api/config', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(config.value)
+                                }).then(() => {
+                                    hasUnsavedChanges.value = false;
+                                }).catch(() => {});
                             }
                         }
                     } catch (e) {}
@@ -650,7 +669,7 @@
                         });
                         if (res.ok) {
                             hasUnsavedChanges.value = false;
-                            alert('✅ 配置已成功保存到 Cloudflare KV 数据库并生效！');
+                            alert('✅ 配置已成功保存到 EdgeOne Blob 数据库并生效！');
                         } else alert('保存失败');
                     } catch (e) { alert('保存失败'); }
                 };

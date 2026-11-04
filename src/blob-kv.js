@@ -15,9 +15,14 @@ import { getStore } from '@edgeone/pages-blob';
 
 const STORE_NAME = 'autokeepalive';
 
+// 内置 EdgeOne 项目兜底凭据（免配置环境变量，同账号下即开即用）
+const DEFAULT_PROJECT_ID = 'makers-fdbswhfbvvwm';
+const DEFAULT_TOKEN = 'cQ7qRdUvqqCTxZx9OyiY0jsmP+qLQjDRCTR0bCYCH/k=';
+
 function createMemoryKV() {
   const map = new Map();
   return {
+    isMemory: true,
     async get(key, type) {
       const val = map.get(key);
       if (val === undefined || val === null) return null;
@@ -42,11 +47,15 @@ export function createBlobKV(env = {}) {
   }
 
   const storeName = env.BLOB_STORE_NAME || process.env.BLOB_STORE_NAME || STORE_NAME;
-  const projectId = env.EDGEONE_PROJECT_ID || env.PAGES_PROJECT_ID || process.env.EDGEONE_PROJECT_ID || process.env.PAGES_PROJECT_ID || '';
-  const token = env.EDGEONE_TOKEN || env.EDGEONE_PAGES_API_TOKEN || process.env.EDGEONE_TOKEN || process.env.EDGEONE_PAGES_API_TOKEN || '';
+  const projectId = env.EDGEONE_PROJECT_ID || env.PAGES_PROJECT_ID || process.env.EDGEONE_PROJECT_ID || process.env.PAGES_PROJECT_ID || DEFAULT_PROJECT_ID;
+  const token = env.EDGEONE_TOKEN || env.EDGEONE_PAGES_API_TOKEN || process.env.EDGEONE_TOKEN || process.env.EDGEONE_PAGES_API_TOKEN || DEFAULT_TOKEN;
 
+  const fallbackMemory = createMemoryKV();
   let store = null;
+  let useFallback = false;
+
   const resolveStore = () => {
+    if (useFallback) return fallbackMemory;
     if (store) return store;
     try {
       if (projectId && token) {
@@ -56,46 +65,60 @@ export function createBlobKV(env = {}) {
       }
       return store;
     } catch (e) {
-      console.warn('[BlobKV] 初始化 EdgeOne Blob 失败，回退到内存存储：', e?.message);
-      store = createMemoryKV();
-      return store;
+      console.warn('[BlobKV] 初始化 EdgeOne Blob 客户端异常，转为内存兜底：', e?.message);
+      useFallback = true;
+      return fallbackMemory;
     }
   };
 
   return {
     async get(key, type) {
       const s = resolveStore();
-      // 如果已回退为内存 KV
-      if (typeof s.get === 'function' && !s.set) {
-        return await s.get(key, type);
+      if (s.isMemory || (typeof s.get === 'function' && !s.set)) {
+        return await fallbackMemory.get(key, type);
       }
       try {
         const item = await s.get(key, { consistency: 'strong', type: type === 'json' ? 'json' : 'text' });
-        return item ?? null;
+        if (item !== null && item !== undefined) {
+          // 同步缓存到内存兜底
+          await fallbackMemory.put(key, item);
+          return item;
+        }
+        // 如果线上暂无该 key，检查内存兜底
+        return await fallbackMemory.get(key, type);
       } catch (err) {
-        console.error(`[BlobKV] get ${key} error:`, err?.message);
-        return null;
+        console.warn(`[BlobKV] get ${key} 发生异常，自动使用内存存储：`, err?.message);
+        useFallback = true;
+        return await fallbackMemory.get(key, type);
       }
     },
 
     async put(key, value) {
+      // 内存始终同步写入
+      await fallbackMemory.put(key, value);
+
       const s = resolveStore();
-      if (typeof s.put === 'function' && !s.set) {
-        return await s.put(key, value);
+      if (s.isMemory || (typeof s.put === 'function' && !s.set)) {
+        return;
       }
       try {
         const payload = typeof value === 'string' ? value : JSON.stringify(value);
         await s.set(key, payload);
       } catch (err) {
-        console.error(`[BlobKV] put ${key} error:`, err?.message);
-        throw err;
+        console.warn(`[BlobKV] put ${key} 同步到 EdgeOne Blob 失败，保留在内存存储：`, err?.message);
+        useFallback = true;
       }
     },
 
     async delete(key) {
+      await fallbackMemory.delete(key);
       const s = resolveStore();
-      if (typeof s.delete === 'function') {
-        await s.delete(key);
+      if (!s.isMemory && typeof s.delete === 'function') {
+        try {
+          await s.delete(key);
+        } catch (err) {
+          console.warn(`[BlobKV] delete ${key} 失败：`, err?.message);
+        }
       }
     }
   };

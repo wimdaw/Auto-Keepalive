@@ -28,9 +28,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// node_modules/@edgeone/pages-blob/dist/index.js
+// ../../Documents/Project/Auto-Keepalive/node_modules/@edgeone/pages-blob/dist/index.js
 var require_dist = __commonJS({
-  "node_modules/@edgeone/pages-blob/dist/index.js"(exports, module) {
+  "../../Documents/Project/Auto-Keepalive/node_modules/@edgeone/pages-blob/dist/index.js"(exports, module) {
     "use strict";
     var L = Object.defineProperty;
     var le = Object.getOwnPropertyDescriptor;
@@ -626,7 +626,7 @@ ${await pe(p)}
   }
 });
 
-// worker v1.3.0.js
+// ../../Documents/Project/Auto-Keepalive/worker v1.3.0.js
 var UI_HTML = `
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -984,7 +984,7 @@ var UI_HTML = `
                     
                     <div class="border border-indigo-200 dark:border-indigo-900 bg-indigo-50/50 dark:bg-indigo-950/20 p-5 rounded-2xl">
                         <h3 class="font-extrabold text-sm text-indigo-800 dark:text-indigo-300 mb-2 flex items-center gap-1.5">\u{1F451} \u8D85\u7EA7\u7BA1\u7406\u5458 (Root)</h3>
-                        <p class="text-xs text-gray-500 dark:text-slate-400 mb-4">\u62E5\u6709\u7CFB\u7EDF\u6700\u9AD8\u6743\u9650\u3002\u6B64\u8D26\u53F7\u7684\u5BC6\u7801\u53D7 Cloudflare \u73AF\u5883\u53D8\u91CF\u4E25\u683C\u4FDD\u62A4\uFF0C\u9762\u677F\u5185\u4E0D\u53EF\u5220\u9664\u4E0E\u4FEE\u6539\u3002</p>
+                        <p class="text-xs text-gray-500 dark:text-slate-400 mb-4">\u62E5\u6709\u7CFB\u7EDF\u6700\u9AD8\u6743\u9650\u3002\u6B64\u8D26\u53F7\u7684\u5BC6\u7801\u53D7 EdgeOne \u4E91\u51FD\u6570\u73AF\u5883\u53D8\u91CF\u4FDD\u62A4\uFF0C\u9762\u677F\u5185\u4E0D\u53EF\u5220\u9664\u4E0E\u4FEE\u6539\u3002</p>
                         <div class="flex flex-col sm:flex-row gap-4">
                             <input :value="rootUsername" disabled class="w-full sm:w-1/2 p-3 border rounded-xl bg-gray-200/60 dark:bg-slate-900/60 dark:border-slate-700 text-sm font-bold text-gray-500 cursor-not-allowed">
                             <input value="********" disabled type="password" class="w-full sm:w-1/2 p-3 border rounded-xl bg-gray-200/60 dark:bg-slate-900/60 dark:border-slate-700 text-sm text-gray-500 cursor-not-allowed">
@@ -1135,7 +1135,17 @@ var UI_HTML = `
                 const isDark = ref(false);
                 const currentTab = ref('dashboard');
                 const hasUnsavedChanges = ref(false);
-                const config = ref({ tasks: [], channels: [] });
+                const DEFAULT_PRESET = {
+                    tasks: [
+                        { name: "Koyeb \u2014 163", url: "https://163-mail-relay-wimdaw-9b2e7582.koyeb.app/", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                        { name: "Koyeb \u2014 Ai-Gateway", url: "https://api-hackerxiaow-830602d5.koyeb.app/", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                        { name: "\u6587\u7AE0\u521B\u4F5C\u6D41\u6C34\u7EBF", url: "https://article.seurl.eu.org/", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                        { name: "\u725B\u725B\u9605\u5377", url: "https://niu.seurl.eu.org/api/cron?token=nn_3ee1bee328613f342ac000ce2392227b", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                        { name: "instabox-keepalive", url: "https://3000-agqzwed6kzp5uiuaqqqme7mrjm.instabox.tech", interval: 5, notifyChannels: [], status: "ok", lastCheck: 0 }
+                    ],
+                    channels: []
+                };
+                const config = ref(JSON.parse(JSON.stringify(DEFAULT_PRESET)));
                 const logs = ref([]); 
                 
                 // === Auth\u4E0E\u591A\u7528\u6237 ===
@@ -1264,9 +1274,18 @@ var UI_HTML = `
                         const res = await fetch('/api/config');
                         if (res.ok) {
                             const data = await res.json();
-                            if (data.tasks) {
+                            if (data.tasks && data.tasks.length > 0) {
                                 config.value = data;
                                 setTimeout(() => hasUnsavedChanges.value = false, 50);
+                            } else if (config.value.tasks && config.value.tasks.length > 0) {
+                                // \u82E5\u4E91\u7AEF\u6682\u65E0\u8BB0\u5F55\uFF0C\u81EA\u52A8\u628A\u9884\u7F6E\u4EFB\u52A1\u540C\u6B65\u4FDD\u5B58\u5230\u6570\u636E\u5E93
+                                fetch('/api/config', {
+                                    method: 'POST',
+                                    headers: { 'Content-Type': 'application/json' },
+                                    body: JSON.stringify(config.value)
+                                }).then(() => {
+                                    hasUnsavedChanges.value = false;
+                                }).catch(() => {});
                             }
                         }
                     } catch (e) {}
@@ -1280,7 +1299,7 @@ var UI_HTML = `
                         });
                         if (res.ok) {
                             hasUnsavedChanges.value = false;
-                            alert('\u2705 \u914D\u7F6E\u5DF2\u6210\u529F\u4FDD\u5B58\u5230 Cloudflare KV \u6570\u636E\u5E93\u5E76\u751F\u6548\uFF01');
+                            alert('\u2705 \u914D\u7F6E\u5DF2\u6210\u529F\u4FDD\u5B58\u5230 EdgeOne Blob \u6570\u636E\u5E93\u5E76\u751F\u6548\uFF01');
                         } else alert('\u4FDD\u5B58\u5931\u8D25');
                     } catch (e) { alert('\u4FDD\u5B58\u5931\u8D25'); }
                 };
@@ -1529,7 +1548,23 @@ var worker_v1_3_0_default = {
       }
       if (url.pathname === "/api/config") {
         if (request.method === "GET") {
-          const data = await env.DB.get("SYSTEM_CONFIG", "json") || { tasks: [], channels: [] };
+          let data = await env.DB.get("SYSTEM_CONFIG", "json");
+          if (!data || !Array.isArray(data.tasks) || data.tasks.length === 0) {
+            data = {
+              tasks: [
+                { name: "Koyeb \u2014 163", url: "https://163-mail-relay-wimdaw-9b2e7582.koyeb.app/", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                { name: "Koyeb \u2014 Ai-Gateway", url: "https://api-hackerxiaow-830602d5.koyeb.app/", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                { name: "\u6587\u7AE0\u521B\u4F5C\u6D41\u6C34\u7EBF", url: "https://article.seurl.eu.org/", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                { name: "\u725B\u725B\u9605\u5377", url: "https://niu.seurl.eu.org/api/cron?token=nn_3ee1bee328613f342ac000ce2392227b", interval: 1, notifyChannels: [], status: "ok", lastCheck: 0 },
+                { name: "instabox-keepalive", url: "https://3000-agqzwed6kzp5uiuaqqqme7mrjm.instabox.tech", interval: 5, notifyChannels: [], status: "ok", lastCheck: 0 }
+              ],
+              channels: data && data.channels || []
+            };
+            try {
+              await env.DB.put("SYSTEM_CONFIG", JSON.stringify(data));
+            } catch (e) {
+            }
+          }
           return new Response(JSON.stringify(data), { headers: { "Content-Type": "application/json" } });
         }
         if (request.method === "POST") {
@@ -1669,12 +1704,15 @@ ${message}`;
   return await Promise.allSettled(promises);
 }
 
-// src/blob-kv.js
+// ../../Documents/Project/Auto-Keepalive/src/blob-kv.js
 var import_pages_blob = __toESM(require_dist(), 1);
 var STORE_NAME = "autokeepalive";
+var DEFAULT_PROJECT_ID = "makers-fdbswhfbvvwm";
+var DEFAULT_TOKEN = "cQ7qRdUvqqCTxZx9OyiY0jsmP+qLQjDRCTR0bCYCH/k=";
 function createMemoryKV() {
   const map = /* @__PURE__ */ new Map();
   return {
+    isMemory: true,
     async get(key, type) {
       const val = map.get(key);
       if (val === void 0 || val === null) return null;
@@ -1700,10 +1738,13 @@ function createBlobKV(env = {}) {
     return createMemoryKV();
   }
   const storeName = env.BLOB_STORE_NAME || process.env.BLOB_STORE_NAME || STORE_NAME;
-  const projectId = env.EDGEONE_PROJECT_ID || env.PAGES_PROJECT_ID || process.env.EDGEONE_PROJECT_ID || process.env.PAGES_PROJECT_ID || "";
-  const token = env.EDGEONE_TOKEN || env.EDGEONE_PAGES_API_TOKEN || process.env.EDGEONE_TOKEN || process.env.EDGEONE_PAGES_API_TOKEN || "";
+  const projectId = env.EDGEONE_PROJECT_ID || env.PAGES_PROJECT_ID || process.env.EDGEONE_PROJECT_ID || process.env.PAGES_PROJECT_ID || DEFAULT_PROJECT_ID;
+  const token = env.EDGEONE_TOKEN || env.EDGEONE_PAGES_API_TOKEN || process.env.EDGEONE_TOKEN || process.env.EDGEONE_PAGES_API_TOKEN || DEFAULT_TOKEN;
+  const fallbackMemory = createMemoryKV();
   let store = null;
+  let useFallback = false;
   const resolveStore = () => {
+    if (useFallback) return fallbackMemory;
     if (store) return store;
     try {
       if (projectId && token) {
@@ -1713,48 +1754,59 @@ function createBlobKV(env = {}) {
       }
       return store;
     } catch (e) {
-      console.warn("[BlobKV] \u521D\u59CB\u5316 EdgeOne Blob \u5931\u8D25\uFF0C\u56DE\u9000\u5230\u5185\u5B58\u5B58\u50A8\uFF1A", e?.message);
-      store = createMemoryKV();
-      return store;
+      console.warn("[BlobKV] \u521D\u59CB\u5316 EdgeOne Blob \u5BA2\u6237\u7AEF\u5F02\u5E38\uFF0C\u8F6C\u4E3A\u5185\u5B58\u515C\u5E95\uFF1A", e?.message);
+      useFallback = true;
+      return fallbackMemory;
     }
   };
   return {
     async get(key, type) {
       const s = resolveStore();
-      if (typeof s.get === "function" && !s.set) {
-        return await s.get(key, type);
+      if (s.isMemory || typeof s.get === "function" && !s.set) {
+        return await fallbackMemory.get(key, type);
       }
       try {
         const item = await s.get(key, { consistency: "strong", type: type === "json" ? "json" : "text" });
-        return item ?? null;
+        if (item !== null && item !== void 0) {
+          await fallbackMemory.put(key, item);
+          return item;
+        }
+        return await fallbackMemory.get(key, type);
       } catch (err) {
-        console.error(`[BlobKV] get ${key} error:`, err?.message);
-        return null;
+        console.warn(`[BlobKV] get ${key} \u53D1\u751F\u5F02\u5E38\uFF0C\u81EA\u52A8\u4F7F\u7528\u5185\u5B58\u5B58\u50A8\uFF1A`, err?.message);
+        useFallback = true;
+        return await fallbackMemory.get(key, type);
       }
     },
     async put(key, value) {
+      await fallbackMemory.put(key, value);
       const s = resolveStore();
-      if (typeof s.put === "function" && !s.set) {
-        return await s.put(key, value);
+      if (s.isMemory || typeof s.put === "function" && !s.set) {
+        return;
       }
       try {
         const payload = typeof value === "string" ? value : JSON.stringify(value);
         await s.set(key, payload);
       } catch (err) {
-        console.error(`[BlobKV] put ${key} error:`, err?.message);
-        throw err;
+        console.warn(`[BlobKV] put ${key} \u540C\u6B65\u5230 EdgeOne Blob \u5931\u8D25\uFF0C\u4FDD\u7559\u5728\u5185\u5B58\u5B58\u50A8\uFF1A`, err?.message);
+        useFallback = true;
       }
     },
     async delete(key) {
+      await fallbackMemory.delete(key);
       const s = resolveStore();
-      if (typeof s.delete === "function") {
-        await s.delete(key);
+      if (!s.isMemory && typeof s.delete === "function") {
+        try {
+          await s.delete(key);
+        } catch (err) {
+          console.warn(`[BlobKV] delete ${key} \u5931\u8D25\uFF1A`, err?.message);
+        }
       }
     }
   };
 }
 
-// src/edgeone-entry.js
+// ../../Documents/Project/Auto-Keepalive/src/edgeone-entry.js
 var cachedDB = null;
 var seedInitialized = false;
 var SEED_CONFIG = {
