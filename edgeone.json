@@ -11,11 +11,11 @@
   },
   "headers": [
     {
-      "source": "/index.html",
+      "source": "/robots.txt",
       "headers": [
         {
           "key": "Cache-Control",
-          "value": "no-store, no-cache, must-revalidate"
+          "value": "public, max-age=86400"
         }
       ]
     }

@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
@@ -7,21 +7,17 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outdir = join(root, 'cloud-functions');
 const distDir = join(root, 'dist');
 
-// 1. 提取 worker 中的 UI_HTML 写入 dist/index.html，确保静态面板秒开且完全满足 EdgeOne Pages 静态输出目录规范
+// 1. 准备静态输出目录 dist
+// ⚠️ 严禁在 dist 下生成 index.html！
+// EdgeOne 边缘 CDN 会把带有 index.html 的项目判定为 SPA 站点，将包括 /api/* 在内的所有动态请求全部重写回退到 index.html，
+// 从而导致云函数完全无法接收到 /api/cron/tick 等接口请求。
+// 我们在 dist 放置标准的 robots.txt 保证 Pages 静态输出目录合法且非空，全站路由与动态 API 由云函数完全统一接管。
 if (existsSync(distDir)) {
   rmSync(distDir, { recursive: true, force: true });
 }
 mkdirSync(distDir, { recursive: true });
-
-const workerFile = readFileSync(join(root, 'worker v1.3.0.js'), 'utf8');
-const match = workerFile.match(/const UI_HTML = `([\s\S]*?)`;\n\n\/\/ --- Web Crypto API/);
-if (match && match[1]) {
-  writeFileSync(join(distDir, 'index.html'), match[1].trim(), 'utf8');
-  console.log('✓ 成功生成静态面板 dist/index.html');
-} else {
-  writeFileSync(join(distDir, 'index.html'), '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Auto-Keepalive</title></head><body><script>location.href="/"</script></body></html>', 'utf8');
-  console.log('! 兜底生成 dist/index.html');
-}
+writeFileSync(join(distDir, 'robots.txt'), 'User-agent: *\nDisallow:\n', 'utf8');
+console.log('✓ 成功准备静态目录 dist/robots.txt (无 index.html SPA 拦截)');
 
 // 2. 打包 EdgeOne 云函数
 if (!existsSync(outdir)) {
@@ -43,8 +39,9 @@ await esbuild.build({
   logLevel: 'info',
 });
 
-// 3. 写入标准桥接 index.js (保持与 epay-pages 架构完全对齐)
-writeFileSync(join(outdir, 'index.js'), "export { onRequest, default } from './[[default]].js';\n", 'utf8');
+// 3. 将完整的自包含产物复制给 index.js (保证根路径 / 与通配路径 /* 拥有完全独立、自包含的执行模块)
+const bundlePath = join(outdir, '[[default]].js');
+copyFileSync(bundlePath, join(outdir, 'index.js'));
 
 const apiDir = join(outdir, 'api');
 if (existsSync(apiDir)) {
