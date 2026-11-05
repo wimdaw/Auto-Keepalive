@@ -39,9 +39,8 @@ await esbuild.build({
   logLevel: 'info',
 });
 
-// 3. 将完整的自包含产物复制给 index.js (保证根路径 / 与通配路径 /* 拥有完全独立、自包含的执行模块)
-const bundlePath = join(outdir, '[[default]].js');
-copyFileSync(bundlePath, join(outdir, 'index.js'));
+// 3. 写入标准桥接 index.js (保证根路径 / 导向 [[default]].js，与 epay-pages 完全一致)
+writeFileSync(join(outdir, 'index.js'), "export { onRequest, default } from './[[default]].js';\n", 'utf8');
 
 const apiDir = join(outdir, 'api');
 if (existsSync(apiDir)) {

@@ -3,6 +3,7 @@
   "buildCommand": "npm run build",
   "installCommand": "npm install --include=dev",
   "outputDirectory": "./dist",
+  "nodeVersion": "20.18.0",
   "cloudFunctions": {
     "maxDuration": 120,
     "regions": {
@@ -22,8 +23,8 @@
   ],
   "schedules": [
     {
-      "name": "keepalive-cron-every-1m",
-      "cron": "* * * * *",
+      "name": "keepalive-cron-daily",
+      "cron": "0 3 * * *",
       "path": "/api/cron/tick",
       "method": "GET",
       "timezone": "Asia/Shanghai"
