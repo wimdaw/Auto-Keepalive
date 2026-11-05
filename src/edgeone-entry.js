@@ -10,6 +10,7 @@
  */
 import worker from '../worker v1.3.0.js';
 import { createBlobKV } from './blob-kv.js';
+import { renderVideoPanel } from './video-panel.js';
 
 let cachedDB = null;
 let seedInitialized = false;
@@ -195,6 +196,17 @@ export async function onRequest(context) {
           'Content-Type': 'application/json',
           'Cache-Control': 'no-store, no-cache, must-revalidate',
           'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+
+    // 1.5 视频任务监控面板（免登录，凭 EdgeRelay 的签名 token）
+    if (cleanPath === '/video') {
+      return new Response(renderVideoPanel(), {
+        status: 200,
+        headers: {
+          'Content-Type': 'text/html;charset=UTF-8',
+          'Cache-Control': 'no-store, no-cache, must-revalidate'
         }
       });
     }
