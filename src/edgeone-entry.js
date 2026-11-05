@@ -127,66 +127,12 @@ export async function onRequest(context) {
   // 保证种子数据已就绪
   await ensureSeedConfig(env.DB);
 
-  // 1. 定时任务触发点（EdgeOne schedules 默认打 /api/cron/tick，外部拨测与面板一键探测入口）
-  if (url.pathname === '/api/cron/tick' || url.pathname === '/api/cron') {
-    const cronToken = env.CRON_TOKEN;
-    const reqToken = url.searchParams.get('token');
-    const isForce = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
-
-    // 如果配置了 CRON_TOKEN 则校验口令（管理员 Cookie 会话可直接免口令触发）
-    if (cronToken && reqToken !== cronToken) {
-      const cookieHeader = req.headers.get('Cookie') || '';
-      const hasSession = cookieHeader.includes('KA_SESSION=');
-      if (!hasSession) {
-        return new Response(JSON.stringify({ status: 'error', message: 'Unauthorized cron token' }), {
-          status: 403,
-          headers: { 'Content-Type': 'application/json' }
-        });
-      }
-    }
-
-    try {
-      const scheduledEvent = {
-        cron: '* * * * *',
-        type: 'scheduled',
-        scheduledTime: Date.now(),
-        force: isForce
-      };
-      const executionCtx = {
-        waitUntil: (promise) => {
-          Promise.resolve(promise).catch((err) => console.error('[Cron waitUntil Error]', err));
-        },
-        passThroughOnException: () => {}
-      };
-
-      await worker.scheduled(scheduledEvent, env, executionCtx);
-
-      return new Response(JSON.stringify({ status: 'ok', message: 'Keepalive check executed successfully', timestamp: Date.now() }), {
-        status: 200,
-        headers: {
-          'Content-Type': 'application/json',
-          'Cache-Control': 'no-store, no-cache, must-revalidate',
-          'Access-Control-Allow-Origin': '*'
-        }
-      });
-    } catch (err) {
-      console.error('[Cron Execution Error]', err);
-      return new Response(JSON.stringify({ status: 'error', message: err?.message || String(err) }), {
-        status: 500,
-        headers: {
-          'Content-Type': 'application/json',
-          'Access-Control-Allow-Origin': '*'
-        }
-      });
-    }
-  }
-
-  // 2. 正常 Web 界面与业务 API 分发
   const executionCtx = {
     waitUntil: (p) => Promise.resolve(p).catch(console.error),
     passThroughOnException: () => {}
   };
 
+  // 直接交由包含原生 cron/tick 分发与全量鉴权的 worker.fetch 处理
   return await worker.fetch(req, env, executionCtx);
 }
 

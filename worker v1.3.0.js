@@ -720,14 +720,15 @@ const UI_HTML = `
                     try {
                         const res = await fetch('/api/cron/tick?force=1', {
                             method: 'GET',
+                            credentials: 'include',
                             headers: { 'Accept': 'application/json' }
                         });
+                        const rawText = await res.text();
                         let data = null;
                         try {
-                            data = await res.json();
-                        } catch {
-                            const errText = await res.text().catch(() => '');
-                            throw new Error('服务返回异常 (HTTP ' + res.status + '): ' + errText.slice(0, 100));
+                            data = JSON.parse(rawText);
+                        } catch (parseErr) {
+                            throw new Error('服务返回非 JSON (HTTP ' + res.status + '): ' + (rawText ? rawText.slice(0, 80) : '空响应'));
                         }
 
                         if (res.ok && data.status === 'ok') {
@@ -912,9 +913,68 @@ export default {
         const url = new URL(request.url);
         const adminUser = env.ADMIN_USER || 'admin';
         const adminPass = env.ADMIN_PASS || 'admin';
+        const pathname = url.pathname.replace(/\/+$/, '') || '/';
 
-        // 1. 登录验证下发 Cookie
-        if (url.pathname === '/api/login' && request.method === 'POST') {
+        // 1. 定时任务触发点（支持外部高频定时拨测与控制面板一键手动触发）
+        if (pathname === '/api/cron/tick' || pathname === '/api/cron') {
+            const cronToken = env.CRON_TOKEN;
+            const reqToken = url.searchParams.get('token');
+            const isForce = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
+
+            // 鉴权：未配置 CRON_TOKEN 时默认放行；配置时需 token 匹配或带有效管理员会话 Cookie
+            let isAllowed = !cronToken;
+            if (cronToken && reqToken === cronToken) {
+                isAllowed = true;
+            }
+            if (!isAllowed) {
+                const sessionCookie = getCookie(request, 'KA_SESSION');
+                const tokenUser = await verifySessionToken(adminPass, sessionCookie);
+                if (tokenUser === adminUser) isAllowed = true;
+            }
+
+            if (!isAllowed) {
+                return new Response(JSON.stringify({ status: 'error', message: 'Unauthorized cron token' }), {
+                    status: 403,
+                    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+                });
+            }
+
+            try {
+                const scheduledEvent = {
+                    cron: '* * * * *',
+                    type: 'scheduled',
+                    scheduledTime: Date.now(),
+                    force: isForce
+                };
+                const execCtx = ctx || {
+                    waitUntil: (p) => Promise.resolve(p).catch(console.error),
+                    passThroughOnException: () => {}
+                };
+                await this.scheduled(scheduledEvent, env, execCtx);
+
+                return new Response(JSON.stringify({
+                    status: 'ok',
+                    message: 'Keepalive check executed successfully',
+                    timestamp: Date.now()
+                }), {
+                    status: 200,
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Cache-Control': 'no-store, no-cache, must-revalidate',
+                        'Access-Control-Allow-Origin': '*'
+                    }
+                });
+            } catch (err) {
+                console.error('[Cron Execution Error]', err);
+                return new Response(JSON.stringify({ status: 'error', message: err?.message || String(err) }), {
+                    status: 500,
+                    headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+                });
+            }
+        }
+
+        // 2. 登录验证下发 Cookie
+        if (pathname === '/api/login' && request.method === 'POST') {
             const { user, pass } = await request.json();
             let authSuccess = false;
             
@@ -940,13 +1000,13 @@ export default {
             return new Response('{"status":"error"}', { status: 401, headers: { 'Content-Type': 'application/json' } });
         }
 
-        // 2. 登出清理 Cookie
-        if (url.pathname === '/api/logout' && request.method === 'POST') {
+        // 3. 登出清理 Cookie
+        if (pathname === '/api/logout' && request.method === 'POST') {
             return new Response('{"status":"ok"}', { headers: { 'Content-Type': 'application/json', 'Set-Cookie': 'KA_SESSION=; Path=/; HttpOnly; Max-Age=0' } });
         }
 
-        // 3. 所有私有 API 会话验签门神
-        if (url.pathname.startsWith('/api/')) {
+        // 4. 所有私有 API 会话验签门神
+        if (pathname.startsWith('/api/')) {
             const sessionCookie = getCookie(request, 'KA_SESSION');
             const tokenUser = await verifySessionToken(adminPass, sessionCookie);
             
@@ -958,13 +1018,13 @@ export default {
                 if (kvUsers.some(u => u.username === tokenUser)) isAuthValid = true;
             }
 
-            if (url.pathname === '/api/check-session') {
+            if (pathname === '/api/check-session') {
                 return isAuthValid ? new Response(JSON.stringify({user: tokenUser}), { headers: { 'Content-Type': 'application/json' } }) : new Response('unauthorized', { status: 401 });
             }
             if (!isAuthValid) return new Response('{"error":"Session Expired"}', { status: 401, headers: { 'Content-Type': 'application/json' } });
 
             // ====== 私有业务 API 分发区 ======
-            if (url.pathname === '/api/users') {
+            if (pathname === '/api/users') {
                 if (request.method === 'GET') {
                     const kvUsers = await env.DB.get('SYSTEM_USERS', 'json') || [];
                     return new Response(JSON.stringify({ rootUser: adminUser, users: kvUsers }), { headers: { 'Content-Type': 'application/json' } });
@@ -976,7 +1036,7 @@ export default {
                 }
             }
 
-            if (url.pathname === '/api/test-channel' && request.method === 'POST') {
+            if (pathname === '/api/test-channel' && request.method === 'POST') {
                 const ch = await request.json();
                 const testTime = new Date().toLocaleString('zh-CN', {timeZone: 'Asia/Shanghai'});
                 const results = await sendNotifications([ch], "🔧 渠道配置连通性测试", `这是一条测试脉搏消息，如果您收到它，说明该通知渠道已成功接通！\n\n【测试时间】${testTime}`);
@@ -985,7 +1045,7 @@ export default {
                 else return new Response(JSON.stringify({status: "error", message: first ? first.reason.message : "未执行发送"}), { headers: { 'Content-Type': 'application/json' } });
             }
 
-            if (url.pathname === '/api/logs') {
+            if (pathname === '/api/logs') {
                 if (request.method === 'GET') {
                     const logs = await env.DB.get('SYSTEM_LOGS', 'json') || [];
                     return new Response(JSON.stringify(logs), { headers: { 'Content-Type': 'application/json' } });
@@ -996,7 +1056,7 @@ export default {
                 }
             }
 
-            if (url.pathname === '/api/config') {
+            if (pathname === '/api/config') {
                 if (request.method === 'GET') {
                     let data = await env.DB.get('SYSTEM_CONFIG', 'json');
                     if (!data || !Array.isArray(data.tasks) || data.tasks.length === 0) {
@@ -1020,9 +1080,15 @@ export default {
                     return new Response('{"status":"ok"}', { headers: { 'Content-Type': 'application/json' } });
                 }
             }
+
+            // 兜底防护：所有未匹配的 /api/ 接口统一返回 404 JSON，禁止滑落到 HTML 视图
+            return new Response(JSON.stringify({ status: 'error', error: 'API Not Found', path: pathname }), {
+                status: 404,
+                headers: { 'Content-Type': 'application/json' }
+            });
         }
 
-        // 4. 未匹配 API 则返回前端 HTML 视图
+        // 5. 未匹配的页面路径则返回前端 HTML 视图
         return new Response(UI_HTML, { headers: { 'Content-Type': 'text/html;charset=UTF-8' } });
     },
 

@@ -42,11 +42,21 @@ await esbuild.build({
   logLevel: 'info',
 });
 
-// 生成 index.js 映射
+// 生成 index.js 与专属路由映射
 writeFileSync(
   join(outdir, 'index.js'),
   "export { onRequest, default } from './[[default]].js';\n",
   'utf8'
 );
 
-console.log('✓ 函数打包完成: cloud-functions/[[default]].js 和 cloud-functions/index.js');
+const cronDir = join(outdir, 'api', 'cron');
+if (!existsSync(cronDir)) {
+  mkdirSync(cronDir, { recursive: true });
+}
+writeFileSync(
+  join(cronDir, 'tick.js'),
+  "export { onRequest, default } from '../../[[default]].js';\n",
+  'utf8'
+);
+
+console.log('✓ 函数打包完成: cloud-functions/[[default]].js、index.js 及 api/cron/tick.js');

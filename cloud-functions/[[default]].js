@@ -28,9 +28,9 @@ var __toESM = (mod, isNodeMode, target) => (target = mod != null ? __create(__ge
   mod
 ));
 
-// ../../Documents/Project/Auto-Keepalive/node_modules/@edgeone/pages-blob/dist/index.js
+// node_modules/@edgeone/pages-blob/dist/index.js
 var require_dist = __commonJS({
-  "../../Documents/Project/Auto-Keepalive/node_modules/@edgeone/pages-blob/dist/index.js"(exports, module) {
+  "node_modules/@edgeone/pages-blob/dist/index.js"(exports, module) {
     "use strict";
     var L = Object.defineProperty;
     var le = Object.getOwnPropertyDescriptor;
@@ -626,7 +626,7 @@ ${await pe(p)}
   }
 });
 
-// ../../Documents/Project/Auto-Keepalive/worker v1.3.0.js
+// worker v1.3.0.js
 var UI_HTML = `
 <!DOCTYPE html>
 <html lang="zh-CN">
@@ -1348,14 +1348,15 @@ var UI_HTML = `
                     try {
                         const res = await fetch('/api/cron/tick?force=1', {
                             method: 'GET',
+                            credentials: 'include',
                             headers: { 'Accept': 'application/json' }
                         });
+                        const rawText = await res.text();
                         let data = null;
                         try {
-                            data = await res.json();
-                        } catch {
-                            const errText = await res.text().catch(() => '');
-                            throw new Error('\u670D\u52A1\u8FD4\u56DE\u5F02\u5E38 (HTTP ' + res.status + '): ' + errText.slice(0, 100));
+                            data = JSON.parse(rawText);
+                        } catch (parseErr) {
+                            throw new Error('\u670D\u52A1\u8FD4\u56DE\u975E JSON (HTTP ' + res.status + '): ' + (rawText ? rawText.slice(0, 80) : '\u7A7A\u54CD\u5E94'));
                         }
 
                         if (res.ok && data.status === 'ok') {
@@ -1533,7 +1534,60 @@ var worker_v1_3_0_default = {
     const url = new URL(request.url);
     const adminUser = env.ADMIN_USER || "admin";
     const adminPass = env.ADMIN_PASS || "admin";
-    if (url.pathname === "/api/login" && request.method === "POST") {
+    const pathname = url.pathname.replace(/\/+$/, "") || "/";
+    if (pathname === "/api/cron/tick" || pathname === "/api/cron") {
+      const cronToken = env.CRON_TOKEN;
+      const reqToken = url.searchParams.get("token");
+      const isForce = url.searchParams.get("force") === "1" || url.searchParams.get("force") === "true";
+      let isAllowed = !cronToken;
+      if (cronToken && reqToken === cronToken) {
+        isAllowed = true;
+      }
+      if (!isAllowed) {
+        const sessionCookie = getCookie(request, "KA_SESSION");
+        const tokenUser = await verifySessionToken(adminPass, sessionCookie);
+        if (tokenUser === adminUser) isAllowed = true;
+      }
+      if (!isAllowed) {
+        return new Response(JSON.stringify({ status: "error", message: "Unauthorized cron token" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+        });
+      }
+      try {
+        const scheduledEvent = {
+          cron: "* * * * *",
+          type: "scheduled",
+          scheduledTime: Date.now(),
+          force: isForce
+        };
+        const execCtx = ctx || {
+          waitUntil: (p) => Promise.resolve(p).catch(console.error),
+          passThroughOnException: () => {
+          }
+        };
+        await this.scheduled(scheduledEvent, env, execCtx);
+        return new Response(JSON.stringify({
+          status: "ok",
+          message: "Keepalive check executed successfully",
+          timestamp: Date.now()
+        }), {
+          status: 200,
+          headers: {
+            "Content-Type": "application/json",
+            "Cache-Control": "no-store, no-cache, must-revalidate",
+            "Access-Control-Allow-Origin": "*"
+          }
+        });
+      } catch (err) {
+        console.error("[Cron Execution Error]", err);
+        return new Response(JSON.stringify({ status: "error", message: err?.message || String(err) }), {
+          status: 500,
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+        });
+      }
+    }
+    if (pathname === "/api/login" && request.method === "POST") {
       const { user, pass } = await request.json();
       let authSuccess = false;
       if (user === adminUser && pass === adminPass) {
@@ -1555,10 +1609,10 @@ var worker_v1_3_0_default = {
       }
       return new Response('{"status":"error"}', { status: 401, headers: { "Content-Type": "application/json" } });
     }
-    if (url.pathname === "/api/logout" && request.method === "POST") {
+    if (pathname === "/api/logout" && request.method === "POST") {
       return new Response('{"status":"ok"}', { headers: { "Content-Type": "application/json", "Set-Cookie": "KA_SESSION=; Path=/; HttpOnly; Max-Age=0" } });
     }
-    if (url.pathname.startsWith("/api/")) {
+    if (pathname.startsWith("/api/")) {
       const sessionCookie = getCookie(request, "KA_SESSION");
       const tokenUser = await verifySessionToken(adminPass, sessionCookie);
       let isAuthValid = false;
@@ -1568,11 +1622,11 @@ var worker_v1_3_0_default = {
         const kvUsers = await env.DB.get("SYSTEM_USERS", "json") || [];
         if (kvUsers.some((u) => u.username === tokenUser)) isAuthValid = true;
       }
-      if (url.pathname === "/api/check-session") {
+      if (pathname === "/api/check-session") {
         return isAuthValid ? new Response(JSON.stringify({ user: tokenUser }), { headers: { "Content-Type": "application/json" } }) : new Response("unauthorized", { status: 401 });
       }
       if (!isAuthValid) return new Response('{"error":"Session Expired"}', { status: 401, headers: { "Content-Type": "application/json" } });
-      if (url.pathname === "/api/users") {
+      if (pathname === "/api/users") {
         if (request.method === "GET") {
           const kvUsers = await env.DB.get("SYSTEM_USERS", "json") || [];
           return new Response(JSON.stringify({ rootUser: adminUser, users: kvUsers }), { headers: { "Content-Type": "application/json" } });
@@ -1583,7 +1637,7 @@ var worker_v1_3_0_default = {
           return new Response('{"status":"ok"}', { headers: { "Content-Type": "application/json" } });
         }
       }
-      if (url.pathname === "/api/test-channel" && request.method === "POST") {
+      if (pathname === "/api/test-channel" && request.method === "POST") {
         const ch = await request.json();
         const testTime = (/* @__PURE__ */ new Date()).toLocaleString("zh-CN", { timeZone: "Asia/Shanghai" });
         const results = await sendNotifications([ch], "\u{1F527} \u6E20\u9053\u914D\u7F6E\u8FDE\u901A\u6027\u6D4B\u8BD5", `\u8FD9\u662F\u4E00\u6761\u6D4B\u8BD5\u8109\u640F\u6D88\u606F\uFF0C\u5982\u679C\u60A8\u6536\u5230\u5B83\uFF0C\u8BF4\u660E\u8BE5\u901A\u77E5\u6E20\u9053\u5DF2\u6210\u529F\u63A5\u901A\uFF01
@@ -1593,7 +1647,7 @@ var worker_v1_3_0_default = {
         if (first && first.status === "fulfilled") return new Response('{"status":"ok"}', { headers: { "Content-Type": "application/json" } });
         else return new Response(JSON.stringify({ status: "error", message: first ? first.reason.message : "\u672A\u6267\u884C\u53D1\u9001" }), { headers: { "Content-Type": "application/json" } });
       }
-      if (url.pathname === "/api/logs") {
+      if (pathname === "/api/logs") {
         if (request.method === "GET") {
           const logs = await env.DB.get("SYSTEM_LOGS", "json") || [];
           return new Response(JSON.stringify(logs), { headers: { "Content-Type": "application/json" } });
@@ -1603,7 +1657,7 @@ var worker_v1_3_0_default = {
           return new Response('{"status":"ok"}', { headers: { "Content-Type": "application/json" } });
         }
       }
-      if (url.pathname === "/api/config") {
+      if (pathname === "/api/config") {
         if (request.method === "GET") {
           let data = await env.DB.get("SYSTEM_CONFIG", "json");
           if (!data || !Array.isArray(data.tasks) || data.tasks.length === 0) {
@@ -1630,6 +1684,10 @@ var worker_v1_3_0_default = {
           return new Response('{"status":"ok"}', { headers: { "Content-Type": "application/json" } });
         }
       }
+      return new Response(JSON.stringify({ status: "error", error: "API Not Found", path: pathname }), {
+        status: 404,
+        headers: { "Content-Type": "application/json" }
+      });
     }
     return new Response(UI_HTML, { headers: { "Content-Type": "text/html;charset=UTF-8" } });
   },
@@ -1789,7 +1847,7 @@ ${message}`;
   return await Promise.allSettled(promises);
 }
 
-// ../../Documents/Project/Auto-Keepalive/src/blob-kv.js
+// src/blob-kv.js
 var import_pages_blob = __toESM(require_dist(), 1);
 var STORE_NAME = "autokeepalive";
 var DEFAULT_PROJECT_ID = "makers-fdbswhfbvvwm";
@@ -1891,7 +1949,7 @@ function createBlobKV(env = {}) {
   };
 }
 
-// ../../Documents/Project/Auto-Keepalive/src/edgeone-entry.js
+// src/edgeone-entry.js
 var cachedDB = null;
 var seedInitialized = false;
 var SEED_CONFIG = {
@@ -1988,54 +2046,6 @@ async function onRequest(context) {
   const url = new URL(req.url);
   const env = resolveEnv(context.env);
   await ensureSeedConfig(env.DB);
-  if (url.pathname === "/api/cron/tick" || url.pathname === "/api/cron") {
-    const cronToken = env.CRON_TOKEN;
-    const reqToken = url.searchParams.get("token");
-    const isForce = url.searchParams.get("force") === "1" || url.searchParams.get("force") === "true";
-    if (cronToken && reqToken !== cronToken) {
-      const cookieHeader = req.headers.get("Cookie") || "";
-      const hasSession = cookieHeader.includes("KA_SESSION=");
-      if (!hasSession) {
-        return new Response(JSON.stringify({ status: "error", message: "Unauthorized cron token" }), {
-          status: 403,
-          headers: { "Content-Type": "application/json" }
-        });
-      }
-    }
-    try {
-      const scheduledEvent = {
-        cron: "* * * * *",
-        type: "scheduled",
-        scheduledTime: Date.now(),
-        force: isForce
-      };
-      const executionCtx2 = {
-        waitUntil: (promise) => {
-          Promise.resolve(promise).catch((err) => console.error("[Cron waitUntil Error]", err));
-        },
-        passThroughOnException: () => {
-        }
-      };
-      await worker_v1_3_0_default.scheduled(scheduledEvent, env, executionCtx2);
-      return new Response(JSON.stringify({ status: "ok", message: "Keepalive check executed successfully", timestamp: Date.now() }), {
-        status: 200,
-        headers: {
-          "Content-Type": "application/json",
-          "Cache-Control": "no-store, no-cache, must-revalidate",
-          "Access-Control-Allow-Origin": "*"
-        }
-      });
-    } catch (err) {
-      console.error("[Cron Execution Error]", err);
-      return new Response(JSON.stringify({ status: "error", message: err?.message || String(err) }), {
-        status: 500,
-        headers: {
-          "Content-Type": "application/json",
-          "Access-Control-Allow-Origin": "*"
-        }
-      });
-    }
-  }
   const executionCtx = {
     waitUntil: (p) => Promise.resolve(p).catch(console.error),
     passThroughOnException: () => {

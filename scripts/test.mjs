@@ -131,6 +131,30 @@ async function runTests() {
     console.log('✓ 8. 定时任务触发保活探测成功 (/api/cron/tick)');
   }
 
+  // 8.1 测试管理员 Cookie 触发面板一键全量保活 (/api/cron/tick?force=1)
+  {
+    const req = new Request(`${origin}/api/cron/tick?force=1`, {
+      headers: { Cookie: sessionCookie, Accept: 'application/json' }
+    });
+    const res = await onRequest({ request: req });
+    assert.strictEqual(res.status, 200);
+    const cronData = await res.json();
+    assert.strictEqual(cronData.status, 'ok', '管理员会话应当允许免 token 执行探测');
+    console.log('✓ 8.1 控制台一键探测触发正常 (/api/cron/tick?force=1 带 Cookie)');
+  }
+
+  // 8.2 测试未知 /api/ 接口 404 JSON 保护（严禁滑落到 HTML）
+  {
+    const req = new Request(`${origin}/api/non_exist_route`, {
+      headers: { Cookie: sessionCookie }
+    });
+    const res = await onRequest({ request: req });
+    assert.strictEqual(res.status, 404);
+    const data = await res.json();
+    assert.strictEqual(data.status, 'error');
+    console.log('✓ 8.2 API 404 JSON 拦截兜底正常 (杜绝 HTML 滑落)');
+  }
+
   // 9. 测试查看运行日志
   {
     const req = new Request(`${origin}/api/logs`, {
