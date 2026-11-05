@@ -1535,6 +1535,17 @@ var worker_v1_3_0_default = {
     const adminUser = env.ADMIN_USER || "admin";
     const adminPass = env.ADMIN_PASS || "admin";
     const pathname = url.pathname.replace(/\/+$/, "") || "/";
+    if (request.method === "OPTIONS") {
+      return new Response(null, {
+        status: 204,
+        headers: {
+          "Access-Control-Allow-Origin": "*",
+          "Access-Control-Allow-Methods": "GET, POST, PUT, DELETE, OPTIONS",
+          "Access-Control-Allow-Headers": "Content-Type, Authorization, Cookie, Accept",
+          "Access-Control-Max-Age": "86400"
+        }
+      });
+    }
     if (pathname === "/api/cron/tick" || pathname === "/api/cron") {
       const cronToken = env.CRON_TOKEN;
       const reqToken = url.searchParams.get("token");
@@ -1546,7 +1557,12 @@ var worker_v1_3_0_default = {
       if (!isAllowed) {
         const sessionCookie = getCookie(request, "KA_SESSION");
         const tokenUser = await verifySessionToken(adminPass, sessionCookie);
-        if (tokenUser === adminUser) isAllowed = true;
+        if (tokenUser === adminUser) {
+          isAllowed = true;
+        } else if (tokenUser) {
+          const kvUsers = await env.DB.get("SYSTEM_USERS", "json") || [];
+          if (kvUsers.some((u) => u.username === tokenUser)) isAllowed = true;
+        }
       }
       if (!isAllowed) {
         return new Response(JSON.stringify({ status: "error", message: "Unauthorized cron token" }), {

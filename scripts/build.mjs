@@ -1,4 +1,4 @@
-import { existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
@@ -42,21 +42,22 @@ await esbuild.build({
   logLevel: 'info',
 });
 
-// 生成 index.js 与专属路由映射
-writeFileSync(
-  join(outdir, 'index.js'),
-  "export { onRequest, default } from './[[default]].js';\n",
-  'utf8'
-);
+// 3. 生成全自包含的专属路由映射产物 (杜绝相对引用薄壳，确保平台边缘执行 100% 自包含)
+const bundlePath = join(outdir, '[[default]].js');
 
+// 根映射
+copyFileSync(bundlePath, join(outdir, 'index.js'));
+
+// /api/cron/tick 专属路由
 const cronDir = join(outdir, 'api', 'cron');
 if (!existsSync(cronDir)) {
   mkdirSync(cronDir, { recursive: true });
 }
-writeFileSync(
-  join(cronDir, 'tick.js'),
-  "export { onRequest, default } from '../../[[default]].js';\n",
-  'utf8'
-);
+copyFileSync(bundlePath, join(cronDir, 'tick.js'));
+copyFileSync(bundlePath, join(cronDir, 'index.js'));
 
-console.log('✓ 函数打包完成: cloud-functions/[[default]].js、index.js 及 api/cron/tick.js');
+// /api/* 通配路由
+const apiDir = join(outdir, 'api');
+copyFileSync(bundlePath, join(apiDir, '[[default]].js'));
+
+console.log('✓ 函数全自包含打包完成: [[default]].js, index.js, api/cron/tick.js, api/[[default]].js');

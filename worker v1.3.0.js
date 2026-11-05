@@ -915,13 +915,26 @@ export default {
         const adminPass = env.ADMIN_PASS || 'admin';
         const pathname = url.pathname.replace(/\/+$/, '') || '/';
 
+        // 0. 全局 CORS OPTIONS 预检请求快速放行
+        if (request.method === 'OPTIONS') {
+            return new Response(null, {
+                status: 204,
+                headers: {
+                    'Access-Control-Allow-Origin': '*',
+                    'Access-Control-Allow-Methods': 'GET, POST, PUT, DELETE, OPTIONS',
+                    'Access-Control-Allow-Headers': 'Content-Type, Authorization, Cookie, Accept',
+                    'Access-Control-Max-Age': '86400'
+                }
+            });
+        }
+
         // 1. 定时任务触发点（支持外部高频定时拨测与控制面板一键手动触发）
         if (pathname === '/api/cron/tick' || pathname === '/api/cron') {
             const cronToken = env.CRON_TOKEN;
             const reqToken = url.searchParams.get('token');
             const isForce = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
 
-            // 鉴权：未配置 CRON_TOKEN 时默认放行；配置时需 token 匹配或带有效管理员会话 Cookie
+            // 鉴权：未配置 CRON_TOKEN 时默认放行；配置时需 token 匹配或带有效管理员/子账号会话 Cookie
             let isAllowed = !cronToken;
             if (cronToken && reqToken === cronToken) {
                 isAllowed = true;
@@ -929,7 +942,12 @@ export default {
             if (!isAllowed) {
                 const sessionCookie = getCookie(request, 'KA_SESSION');
                 const tokenUser = await verifySessionToken(adminPass, sessionCookie);
-                if (tokenUser === adminUser) isAllowed = true;
+                if (tokenUser === adminUser) {
+                    isAllowed = true;
+                } else if (tokenUser) {
+                    const kvUsers = await env.DB.get('SYSTEM_USERS', 'json') || [];
+                    if (kvUsers.some(u => u.username === tokenUser)) isAllowed = true;
+                }
             }
 
             if (!isAllowed) {
