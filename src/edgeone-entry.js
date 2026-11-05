@@ -122,11 +122,12 @@ async function materializeRequest(req) {
 export async function onRequest(context) {
   try {
     const req = await materializeRequest(context.request);
-    const url = new URL(req.url);
+    const url = new URL(req.url, 'http://127.0.0.1');
+    const cleanPath = url.pathname.replace(/\/+$/, '') || '/';
     const env = resolveEnv(context.env);
 
     // 0. 健康检查探针 (验证云函数是否正常接管流量)
-    if (url.pathname === '/api/health') {
+    if (cleanPath === '/api/health') {
       return new Response(JSON.stringify({
         ok: true,
         service: 'Auto-Keepalive-Pro',
@@ -155,7 +156,50 @@ export async function onRequest(context) {
       passThroughOnException: () => {}
     };
 
-    // 交由包含原生 cron/tick 分发与全量鉴权的 worker.fetch 处理
+    // 1. 外部定时保活调度与控制台一键手动探测专属顶层分发
+    if (cleanPath === '/api/cron/tick' || cleanPath === '/api/cron') {
+      const cronToken = env.CRON_TOKEN;
+      const reqToken = url.searchParams.get('token');
+      const isForce = url.searchParams.get('force') === '1' || url.searchParams.get('force') === 'true';
+
+      // 鉴权：未设置 CRON_TOKEN 或 token 匹配，或带有管理员 Cookie 会话均放行
+      let isAllowed = !cronToken || (cronToken && reqToken === cronToken);
+      if (!isAllowed) {
+        const cookieHeader = req.headers.get('Cookie') || '';
+        if (cookieHeader.includes('KA_SESSION=')) isAllowed = true;
+      }
+
+      if (!isAllowed) {
+        return new Response(JSON.stringify({ status: 'error', message: 'Unauthorized cron token' }), {
+          status: 403,
+          headers: { 'Content-Type': 'application/json', 'Access-Control-Allow-Origin': '*' }
+        });
+      }
+
+      const scheduledEvent = {
+        cron: '* * * * *',
+        type: 'scheduled',
+        scheduledTime: Date.now(),
+        force: isForce
+      };
+
+      await worker.scheduled(scheduledEvent, env, executionCtx);
+
+      return new Response(JSON.stringify({
+        status: 'ok',
+        message: 'Keepalive check executed successfully',
+        timestamp: Date.now()
+      }), {
+        status: 200,
+        headers: {
+          'Content-Type': 'application/json',
+          'Cache-Control': 'no-store, no-cache, must-revalidate',
+          'Access-Control-Allow-Origin': '*'
+        }
+      });
+    }
+
+    // 2. 其余 Web 控制面板与业务 API 委托给 worker.fetch 处理
     return await worker.fetch(req, env, executionCtx);
   } catch (fatalErr) {
     console.error('[Fatal onRequest Error]', fatalErr);

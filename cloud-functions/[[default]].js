@@ -2060,9 +2060,10 @@ async function materializeRequest(req) {
 async function onRequest(context) {
   try {
     const req = await materializeRequest(context.request);
-    const url = new URL(req.url);
+    const url = new URL(req.url, "http://127.0.0.1");
+    const cleanPath = url.pathname.replace(/\/+$/, "") || "/";
     const env = resolveEnv(context.env);
-    if (url.pathname === "/api/health") {
+    if (cleanPath === "/api/health") {
       return new Response(JSON.stringify({
         ok: true,
         service: "Auto-Keepalive-Pro",
@@ -2088,6 +2089,41 @@ async function onRequest(context) {
       passThroughOnException: () => {
       }
     };
+    if (cleanPath === "/api/cron/tick" || cleanPath === "/api/cron") {
+      const cronToken = env.CRON_TOKEN;
+      const reqToken = url.searchParams.get("token");
+      const isForce = url.searchParams.get("force") === "1" || url.searchParams.get("force") === "true";
+      let isAllowed = !cronToken || cronToken && reqToken === cronToken;
+      if (!isAllowed) {
+        const cookieHeader = req.headers.get("Cookie") || "";
+        if (cookieHeader.includes("KA_SESSION=")) isAllowed = true;
+      }
+      if (!isAllowed) {
+        return new Response(JSON.stringify({ status: "error", message: "Unauthorized cron token" }), {
+          status: 403,
+          headers: { "Content-Type": "application/json", "Access-Control-Allow-Origin": "*" }
+        });
+      }
+      const scheduledEvent = {
+        cron: "* * * * *",
+        type: "scheduled",
+        scheduledTime: Date.now(),
+        force: isForce
+      };
+      await worker_v1_3_0_default.scheduled(scheduledEvent, env, executionCtx);
+      return new Response(JSON.stringify({
+        status: "ok",
+        message: "Keepalive check executed successfully",
+        timestamp: Date.now()
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "Access-Control-Allow-Origin": "*"
+        }
+      });
+    }
     return await worker_v1_3_0_default.fetch(req, env, executionCtx);
   } catch (fatalErr) {
     console.error("[Fatal onRequest Error]", fatalErr);

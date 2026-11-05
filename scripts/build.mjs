@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, readFileSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
@@ -7,15 +7,21 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outdir = join(root, 'cloud-functions');
 const distDir = join(root, 'dist');
 
-// 1. 确保 dist 目录存在，但严禁生成 dist/index.html
-// 警告：如果存在 dist/index.html，EdgeOne 边缘 CDN 会开启全局 SPA 重写，
-// 将包括 /api/* 在内的所有动态请求全部当成静态页面重写到 index.html，导致云函数完全无法接收到 API 请求！
+// 1. 提取 worker 中的 UI_HTML 写入 dist/index.html，确保静态面板秒开且完全满足 EdgeOne Pages 静态输出目录规范
 if (existsSync(distDir)) {
   rmSync(distDir, { recursive: true, force: true });
 }
 mkdirSync(distDir, { recursive: true });
-writeFileSync(join(distDir, '.gitkeep'), '', 'utf8');
-console.log('✓ 清理并准备输出目录 dist (保持纯净，由云函数全权托管全站路由与API)');
+
+const workerFile = readFileSync(join(root, 'worker v1.3.0.js'), 'utf8');
+const match = workerFile.match(/const UI_HTML = `([\s\S]*?)`;\n\n\/\/ --- Web Crypto API/);
+if (match && match[1]) {
+  writeFileSync(join(distDir, 'index.html'), match[1].trim(), 'utf8');
+  console.log('✓ 成功生成静态面板 dist/index.html');
+} else {
+  writeFileSync(join(distDir, 'index.html'), '<!DOCTYPE html><html><head><meta charset="utf-8"><title>Auto-Keepalive</title></head><body><script>location.href="/"</script></body></html>', 'utf8');
+  console.log('! 兜底生成 dist/index.html');
+}
 
 // 2. 打包 EdgeOne 云函数
 if (!existsSync(outdir)) {
@@ -37,9 +43,8 @@ await esbuild.build({
   logLevel: 'info',
 });
 
-// 3. 生成根映射 (保持 cloud-functions 结构极简扁平，与 epay-pages 架构完全对齐)
-const bundlePath = join(outdir, '[[default]].js');
-copyFileSync(bundlePath, join(outdir, 'index.js'));
+// 3. 写入标准桥接 index.js (保持与 epay-pages 架构完全对齐)
+writeFileSync(join(outdir, 'index.js'), "export { onRequest, default } from './[[default]].js';\n", 'utf8');
 
 const apiDir = join(outdir, 'api');
 if (existsSync(apiDir)) {
