@@ -1,4 +1,4 @@
-import { copyFileSync, existsSync, mkdirSync, readFileSync, writeFileSync } from 'node:fs';
+import { copyFileSync, existsSync, mkdirSync, rmSync, writeFileSync } from 'node:fs';
 import { dirname, join } from 'node:path';
 import { fileURLToPath } from 'node:url';
 import * as esbuild from 'esbuild';
@@ -7,20 +7,15 @@ const root = join(dirname(fileURLToPath(import.meta.url)), '..');
 const outdir = join(root, 'cloud-functions');
 const distDir = join(root, 'dist');
 
-// 1. 生成静态资源 dist/index.html (EdgeOne 优先静态分发，秒级直出且防止 404)
-if (!existsSync(distDir)) {
-  mkdirSync(distDir, { recursive: true });
+// 1. 确保 dist 目录存在，但严禁生成 dist/index.html
+// 警告：如果存在 dist/index.html，EdgeOne 边缘 CDN 会开启全局 SPA 重写，
+// 将包括 /api/* 在内的所有动态请求全部当成静态页面重写到 index.html，导致云函数完全无法接收到 API 请求！
+if (existsSync(distDir)) {
+  rmSync(distDir, { recursive: true, force: true });
 }
-
-const workerCode = readFileSync(join(root, 'worker v1.3.0.js'), 'utf8');
-const match = workerCode.match(/const UI_HTML = `([\s\S]*?)`;\n\n\/\/ --- Web Crypto API/);
-
-if (match && match[1]) {
-  writeFileSync(join(distDir, 'index.html'), match[1].trim(), 'utf8');
-  console.log('✓ 生成静态主页: dist/index.html');
-} else {
-  console.warn('⚠️ 未正则匹配到 UI_HTML，尝试通过 worker fetch 提取...');
-}
+mkdirSync(distDir, { recursive: true });
+writeFileSync(join(distDir, '.gitkeep'), '', 'utf8');
+console.log('✓ 清理并准备输出目录 dist (保持纯净，由云函数全权托管全站路由与API)');
 
 // 2. 打包 EdgeOne 云函数
 if (!existsSync(outdir)) {
