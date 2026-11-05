@@ -37,22 +37,13 @@ await esbuild.build({
   logLevel: 'info',
 });
 
-// 3. 生成全自包含的专属路由映射产物 (杜绝相对引用薄壳，确保平台边缘执行 100% 自包含)
+// 3. 生成根映射 (保持 cloud-functions 结构极简扁平，与 epay-pages 架构完全对齐)
 const bundlePath = join(outdir, '[[default]].js');
-
-// 根映射
 copyFileSync(bundlePath, join(outdir, 'index.js'));
 
-// /api/cron/tick 专属路由
-const cronDir = join(outdir, 'api', 'cron');
-if (!existsSync(cronDir)) {
-  mkdirSync(cronDir, { recursive: true });
-}
-copyFileSync(bundlePath, join(cronDir, 'tick.js'));
-copyFileSync(bundlePath, join(cronDir, 'index.js'));
-
-// /api/* 通配路由
 const apiDir = join(outdir, 'api');
-copyFileSync(bundlePath, join(apiDir, '[[default]].js'));
+if (existsSync(apiDir)) {
+  rmSync(apiDir, { recursive: true, force: true });
+}
 
-console.log('✓ 函数全自包含打包完成: [[default]].js, index.js, api/cron/tick.js, api/[[default]].js');
+console.log('✓ 函数全自包含打包完成: cloud-functions/[[default]].js 与 index.js');

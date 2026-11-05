@@ -1866,7 +1866,7 @@ ${message}`;
 // src/blob-kv.js
 var import_pages_blob = __toESM(require_dist(), 1);
 var STORE_NAME = "autokeepalive";
-var DEFAULT_PROJECT_ID = "makers-fdbswhfbvvwm";
+var DEFAULT_PROJECT_ID = "makers-ccuwgpbuv8iv";
 var DEFAULT_TOKEN = "cQ7qRdUvqqCTxZx9OyiY0jsmP+qLQjDRCTR0bCYCH/k=";
 function createMemoryKV() {
   const map = /* @__PURE__ */ new Map();
@@ -2058,16 +2058,51 @@ async function materializeRequest(req) {
   }
 }
 async function onRequest(context) {
-  const req = await materializeRequest(context.request);
-  const url = new URL(req.url);
-  const env = resolveEnv(context.env);
-  await ensureSeedConfig(env.DB);
-  const executionCtx = {
-    waitUntil: (p) => Promise.resolve(p).catch(console.error),
-    passThroughOnException: () => {
+  try {
+    const req = await materializeRequest(context.request);
+    const url = new URL(req.url);
+    const env = resolveEnv(context.env);
+    if (url.pathname === "/api/health") {
+      return new Response(JSON.stringify({
+        ok: true,
+        service: "Auto-Keepalive-Pro",
+        store: "edgeone-blob",
+        region: context?.server?.region || "ap-hongkong",
+        timestamp: Date.now()
+      }), {
+        status: 200,
+        headers: {
+          "Content-Type": "application/json",
+          "Cache-Control": "no-store, no-cache, must-revalidate",
+          "Access-Control-Allow-Origin": "*"
+        }
+      });
     }
-  };
-  return await worker_v1_3_0_default.fetch(req, env, executionCtx);
+    try {
+      await ensureSeedConfig(env.DB);
+    } catch (seedErr) {
+      console.warn("[Seed Warn]", seedErr?.message);
+    }
+    const executionCtx = {
+      waitUntil: (p) => Promise.resolve(p).catch(console.error),
+      passThroughOnException: () => {
+      }
+    };
+    return await worker_v1_3_0_default.fetch(req, env, executionCtx);
+  } catch (fatalErr) {
+    console.error("[Fatal onRequest Error]", fatalErr);
+    return new Response(JSON.stringify({
+      status: "error",
+      message: fatalErr?.message || String(fatalErr),
+      stack: fatalErr?.stack
+    }), {
+      status: 500,
+      headers: {
+        "Content-Type": "application/json",
+        "Access-Control-Allow-Origin": "*"
+      }
+    });
+  }
 }
 var edgeone_entry_default = {
   onRequest,

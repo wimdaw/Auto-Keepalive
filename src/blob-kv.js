@@ -16,7 +16,7 @@ import { getStore } from '@edgeone/pages-blob';
 const STORE_NAME = 'autokeepalive';
 
 // 内置 EdgeOne 项目兜底凭据（免配置环境变量，同账号下即开即用）
-const DEFAULT_PROJECT_ID = 'makers-fdbswhfbvvwm';
+const DEFAULT_PROJECT_ID = 'makers-ccuwgpbuv8iv';
 const DEFAULT_TOKEN = 'cQ7qRdUvqqCTxZx9OyiY0jsmP+qLQjDRCTR0bCYCH/k=';
 
 function createMemoryKV() {
